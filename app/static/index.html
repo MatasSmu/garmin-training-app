@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Training</title>
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0093A8">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,380;0,9..144,480;0,9..144,600;0,9..144,680;1,9..144,480;1,9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="masthead-title">
+      <p class="eyebrow">Personal training record</p>
+      <h1>Training</h1>
+    </div>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="sessions">Sessions</button>
+    <button class="tab-btn" data-tab="calendar">Calendar</button>
+    <button class="tab-btn" data-tab="journal">Journal</button>
+    <button class="tab-btn" data-tab="coach">Coach</button>
+  </nav>
+
+  <section id="tab-dashboard" class="tab-section active">
+    <div class="hero-stats" id="dashboardStats" aria-label="Recent training summary">
+      <div class="stat-tile">
+        <span class="stat-value mono" id="statLoad7">—</span>
+        <span class="stat-label">Sessions, last 7 days</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-value mono" id="statMinutes7">—</span>
+        <span class="stat-label">Minutes, last 7 days</span>
+      </div>
+      <div class="stat-tile accent">
+        <span class="stat-value mono" id="statStreak">—</span>
+        <span class="stat-label">Current streak</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-value mono" id="statSleep">—</span>
+        <span class="stat-label">Avg sleep, last 7 nights</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Recent journal notes</h2>
+      <p class="panel-sub">Last 7 days.</p>
+      <div class="journal-list" id="dashboardJournal"></div>
+    </div>
+  </section>
+
+  <section id="tab-sessions" class="tab-section">
+    <div class="panel">
+      <div class="panel-head-row">
+        <h2>Sessions</h2>
+        <select id="typeFilter"><option value="">All types</option></select>
+      </div>
+      <p class="panel-sub">Most recent first.</p>
+      <div class="table-scroll">
+        <table id="sessionsTable">
+          <thead>
+            <tr>
+              <th>Date</th><th>Time</th><th>Type</th><th>Location</th>
+              <th class="num">Duration</th><th class="num">Distance</th><th class="num">Calories</th>
+            </tr>
+          </thead>
+          <tbody id="sessionsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-calendar" class="tab-section">
+    <div class="panel">
+      <div class="cal-head">
+        <div class="cal-nav">
+          <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">&lsaquo;</button>
+          <h2 id="calTitle">—</h2>
+          <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">&rsaquo;</button>
+          <button type="button" class="chat-tool-btn" id="calToday">Today</button>
+        </div>
+        <button type="button" class="btn-primary" id="calAdd">+ Add event</button>
+      </div>
+      <p class="panel-sub">Click a day to add something, click an event to edit or delete it.</p>
+      <div class="cal-legend">
+        <span class="cal-key"><i class="cal-swatch k-training"></i>Training</span>
+        <span class="cal-key"><i class="cal-swatch k-race"></i>Race</span>
+        <span class="cal-key"><i class="cal-swatch k-plan"></i>Plan</span>
+        <span class="cal-key"><i class="cal-swatch k-blocked"></i>Can't train</span>
+        <span class="cal-key"><i class="cal-swatch k-done"></i>Done (Garmin)</span>
+      </div>
+      <div class="cal-grid" id="calGrid" aria-label="Month calendar"></div>
+    </div>
+    <div class="panel">
+      <h2>This month</h2>
+      <p class="panel-sub" id="calAgendaSub">Everything you've marked, in order.</p>
+      <div class="cal-agenda" id="calAgenda"></div>
+    </div>
+
+    <dialog class="cal-dialog" id="calDialog">
+      <form id="calForm" method="dialog">
+        <h2 id="calFormTitle">New event</h2>
+        <fieldset class="cal-kinds">
+          <legend>Type</legend>
+          <label><input type="radio" name="kind" value="training" checked><span>Training</span></label>
+          <label><input type="radio" name="kind" value="race"><span>Race</span></label>
+          <label><input type="radio" name="kind" value="plan"><span>Plan</span></label>
+          <label><input type="radio" name="kind" value="blocked"><span>Can't train</span></label>
+        </fieldset>
+        <fieldset class="cal-kinds cal-reasons" id="calReasons">
+          <legend>Why not</legend>
+          <label><input type="radio" name="reason" value="exam" checked><span>Exam</span></label>
+          <label><input type="radio" name="reason" value="friends"><span>Friends</span></label>
+          <label><input type="radio" name="reason" value="party"><span>Party</span></label>
+          <label><input type="radio" name="reason" value="other"><span>Other</span></label>
+        </fieldset>
+        <label class="cal-field">
+          <span>Title</span>
+          <input type="text" id="calFTitle" maxlength="120" autocomplete="off">
+        </label>
+        <div class="cal-row">
+          <label class="cal-field">
+            <span>Date</span>
+            <input type="date" id="calFDate" required>
+          </label>
+          <label class="cal-field">
+            <span>Until <em>(optional)</em></span>
+            <input type="date" id="calFEnd">
+          </label>
+          <label class="cal-field">
+            <span>Time <em>(optional)</em></span>
+            <input type="time" id="calFTime">
+          </label>
+        </div>
+        <label class="cal-field">
+          <span>Notes <em>(optional)</em></span>
+          <textarea id="calFNotes" rows="3"></textarea>
+        </label>
+        <p class="cal-error" id="calError" hidden></p>
+        <div class="cal-actions">
+          <button type="button" class="cal-delete" id="calDelete" hidden>Delete</button>
+          <span class="cal-actions-spacer"></span>
+          <button type="button" class="chat-tool-btn" id="calCancel">Cancel</button>
+          <button type="submit" class="btn-primary" id="calSave">Save</button>
+        </div>
+      </form>
+    </dialog>
+  </section>
+
+  <section id="tab-journal" class="tab-section">
+    <div class="panel">
+      <h2>New entry</h2>
+      <form class="journal-form" id="journalForm">
+        <input type="date" id="journalDate" required>
+        <textarea id="journalText" placeholder="How did today feel?" required></textarea>
+        <button type="submit" class="btn-primary">Save entry</button>
+      </form>
+    </div>
+    <div class="panel">
+      <h2>All entries</h2>
+      <div class="journal-list" id="journalList"></div>
+    </div>
+  </section>
+
+  <section id="tab-coach" class="tab-section">
+    <div class="panel">
+      <h2>Coach</h2>
+      <p class="panel-sub">Ask one of these, or type your own -- it remembers the conversation.</p>
+      <div class="chat-toolbar">
+        <button type="button" class="chat-tool-btn primary" id="chatNew">+ New chat</button>
+        <button type="button" class="chat-tool-btn" id="chatHistoryToggle" aria-expanded="false">History</button>
+      </div>
+      <div class="chat-history" id="chatHistory" hidden></div>
+      <div class="chat-chips" id="chatChips"></div>
+      <div class="chat-window-wrap">
+        <button type="button" class="chat-scroll-top" id="chatScrollTop" title="Scroll to top">&uarr; Top</button>
+        <div class="chat-window" id="chatWindow"></div>
+      </div>
+      <form class="chat-form" id="chatForm">
+        <input type="text" id="chatInput" placeholder="Ask the coach..." autocomplete="off">
+        <button type="submit" class="btn-primary">Send</button>
+      </form>
+    </div>
+  </section>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,651 @@
+<title>Windlog</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,380;0,9..144,480;0,9..144,600;0,9..144,680;1,9..144,480;1,9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F1F5F6;
+    --surface:#FFFFFF;
+    --surface-2:#E7EEF0;
+    --border:#D2DEE1;
+    --ink:#0F2730;
+    --ink-muted:#52707A;
+    --ink-faint:#8AA3AA;
+    --teal:#0093A8;
+    --teal-strong:#00728A;
+    --teal-soft:#CDEBF0;
+    --accent:#E85A2A;
+    --accent-soft:#FCE0D2;
+    --heat-1:#BEE6EC;
+    --heat-2:#5FB9C8;
+    --heat-3:#0093A8;
+    --shadow: 0 1px 2px rgba(15,39,48,.06), 0 8px 24px -12px rgba(15,39,48,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0A171C;
+      --surface:#102229;
+      --surface-2:#16303A;
+      --border:#234049;
+      --ink:#DCEAEE;
+      --ink-muted:#8CADB6;
+      --ink-faint:#5A7981;
+      --teal:#2FB4C7;
+      --teal-strong:#57C8D9;
+      --teal-soft:#163A42;
+      --accent:#F08A56;
+      --accent-soft:#3A2A20;
+      --heat-1:#1B4750;
+      --heat-2:#2E7A8A;
+      --heat-3:#3FC0D2;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0A171C;
+    --surface:#102229;
+    --surface-2:#16303A;
+    --border:#234049;
+    --ink:#DCEAEE;
+    --ink-muted:#8CADB6;
+    --ink-faint:#5A7981;
+    --teal:#2FB4C7;
+    --teal-strong:#57C8D9;
+    --teal-soft:#163A42;
+    --accent:#F08A56;
+    --accent-soft:#3A2A20;
+    --heat-1:#1B4750;
+    --heat-2:#2E7A8A;
+    --heat-3:#3FC0D2;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Public Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:"Fraunces", Georgia, serif; text-wrap:balance; margin:0;}
+  .mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace; font-variant-numeric:tabular-nums;}
+
+  .page{max-width:1080px; margin:0 auto; padding:40px 24px 64px;}
+
+  /* ---- masthead ---- */
+  .masthead{
+    display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
+    gap:16px; padding-bottom:28px; margin-bottom:32px; border-bottom:1px solid var(--border);
+  }
+  .masthead-title .eyebrow{
+    font-family:"IBM Plex Mono", monospace; font-size:11.5px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--teal-strong); margin:0 0 8px;
+  }
+  .masthead-title h1{font-size:clamp(32px,5vw,44px); font-weight:600; letter-spacing:-.01em; color:var(--ink);}
+  .masthead-title .tagline{margin:6px 0 0; color:var(--ink-muted); font-size:15px; max-width:46ch;}
+  .masthead-side{display:flex; flex-direction:column; align-items:flex-end; gap:10px;}
+  .range-pill{
+    font-family:"IBM Plex Mono", monospace; font-size:12.5px; color:var(--ink-muted);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
+    padding:6px 14px; white-space:nowrap;
+  }
+  .btn-ghost{
+    font:inherit; font-size:13px; font-weight:600; color:var(--teal-strong);
+    background:transparent; border:1px solid var(--teal); border-radius:8px;
+    padding:7px 14px; cursor:pointer;
+  }
+  .btn-ghost:hover{background:var(--teal-soft);}
+  .btn-ghost:focus-visible, button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  /* ---- hero stats ---- */
+  .hero-stats{
+    display:grid; grid-template-columns:repeat(6,1fr); gap:1px;
+    background:var(--border); border:1px solid var(--border); border-radius:14px;
+    overflow:hidden; margin-bottom:36px; box-shadow:var(--shadow);
+  }
+  .stat-tile{
+    background:var(--surface); padding:22px 16px; display:flex; flex-direction:column; gap:6px;
+  }
+  .stat-tile.accent{background:var(--teal-soft);}
+  .stat-value{
+    font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:clamp(20px,2.6vw,28px);
+    color:var(--ink); line-height:1;
+  }
+  .stat-tile.accent .stat-value{color:var(--teal-strong);}
+  .stat-label{font-size:12px; color:var(--ink-muted); letter-spacing:.01em;}
+
+  /* ---- panels ---- */
+  .panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:24px; margin-bottom:24px; box-shadow:var(--shadow);
+  }
+  .panel h2{font-size:19px; font-weight:600; margin-bottom:4px;}
+  .panel-sub{color:var(--ink-muted); font-size:13px; margin:0 0 16px;}
+  .panel-grid{display:grid; grid-template-columns:1.1fr 1fr; gap:24px;}
+  @media (max-width:760px){ .panel-grid{grid-template-columns:1fr;} .hero-stats{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:460px){ .hero-stats{grid-template-columns:repeat(2,1fr);} }
+
+  /* ---- year chart ---- */
+  #yearChart text{fill:var(--ink-muted); font-family:"IBM Plex Mono", monospace; font-size:11px;}
+  #yearChart .bar-label{fill:var(--ink); font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:14px;}
+  #yearChart .axis-line{stroke:var(--border); stroke-width:1;}
+
+  /* ---- period panel ---- */
+  .period-controls{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:18px;}
+  .preset-btn{
+    font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-muted);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
+    padding:6px 13px; cursor:pointer;
+  }
+  .preset-btn.active{background:var(--teal); border-color:var(--teal); color:#fff;}
+  .period-controls label{font-size:12px; color:var(--ink-muted); display:flex; align-items:center; gap:5px;}
+  .period-controls input[type="date"]{
+    font:inherit; font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink);
+    background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:4px 6px;
+  }
+  .period-result{display:flex; gap:0; border-top:1px solid var(--border); padding-top:16px;}
+  .period-result > div{flex:1; text-align:center; border-right:1px solid var(--border); padding:0 8px;}
+  .period-result > div:last-child{border-right:none;}
+  .period-result span{display:block; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:26px; color:var(--teal-strong);}
+  .period-result small{color:var(--ink-muted); font-size:11.5px; letter-spacing:.02em;}
+
+  /* ---- heatmap ---- */
+  .heatmap-scroll{overflow-x:auto; padding-bottom:6px;}
+  .heatmap{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,11px); gap:3px; width:max-content;}
+  .heatmap .cell{width:11px; height:11px; border-radius:2px; background:var(--surface-2); border:1px solid var(--border);}
+  .heatmap .cell[data-level="1"]{background:var(--heat-1); border-color:transparent;}
+  .heatmap .cell[data-level="2"]{background:var(--heat-2); border-color:transparent;}
+  .heatmap .cell[data-level="3"]{background:var(--heat-3); border-color:transparent;}
+  .heatmap-legend{display:flex; align-items:center; gap:6px; margin-top:12px; font-size:11.5px; color:var(--ink-muted);}
+  .heatmap-legend .swatch{width:11px; height:11px; border-radius:2px; display:inline-block; border:1px solid var(--border);}
+  .heatmap-legend .l0{background:var(--surface-2);}
+  .heatmap-legend .l1{background:var(--heat-1); border-color:transparent;}
+  .heatmap-legend .l2{background:var(--heat-2); border-color:transparent;}
+  .heatmap-legend .l3{background:var(--heat-3); border-color:transparent;}
+
+  /* ---- locations ---- */
+  .location-list{display:flex; flex-direction:column; gap:9px;}
+  .loc-row{display:grid; grid-template-columns:22px 130px 1fr 70px 90px; align-items:center; gap:10px;}
+  .loc-flag{font-size:15px;}
+  .loc-name{font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .loc-bar-track{background:var(--surface-2); border-radius:4px; height:10px; overflow:hidden;}
+  .loc-bar-fill{background:var(--teal); height:100%; border-radius:4px;}
+  .loc-count{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-muted); text-align:right;}
+  .loc-dist{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-muted); text-align:right;}
+  @media (max-width:560px){ .loc-row{grid-template-columns:18px 90px 1fr 55px;} .loc-dist{display:none;} }
+
+  /* ---- log table ---- */
+  .panel-head-row{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap;}
+  .panel-head-row h2{margin-bottom:0;}
+  #logSearch{
+    font:inherit; font-size:13px; color:var(--ink); background:var(--surface-2);
+    border:1px solid var(--border); border-radius:8px; padding:7px 12px; min-width:180px;
+  }
+  .table-scroll{overflow-x:auto; overflow-y:auto; max-height:420px; margin-top:14px; border:1px solid var(--border); border-radius:10px;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{
+    position:sticky; top:0; background:var(--surface-2); color:var(--ink-muted);
+    text-align:left; font-weight:600; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+    padding:9px 12px; border-bottom:1px solid var(--border); white-space:nowrap;
+  }
+  thead th.num, td.num{text-align:right;}
+  tbody td{padding:8px 12px; border-bottom:1px solid var(--border); white-space:nowrap; font-family:"IBM Plex Mono",monospace;}
+  tbody td.loc-cell{font-family:"Public Sans",sans-serif; font-weight:500;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface-2);}
+  #emptyRow{display:none; text-align:center; color:var(--ink-muted); font-family:"Public Sans",sans-serif; padding:24px;}
+
+  /* ---- footer ---- */
+  .foot{margin-top:8px; color:var(--ink-faint); font-size:12px; line-height:1.6;}
+  .foot a{color:var(--teal-strong);}
+
+  @media (prefers-reduced-motion: no-preference){
+    .stat-tile{animation:rise .5s ease backwards;}
+    .stat-tile:nth-child(1){animation-delay:.02s;}
+    .stat-tile:nth-child(2){animation-delay:.05s;}
+    .stat-tile:nth-child(3){animation-delay:.08s;}
+    .stat-tile:nth-child(4){animation-delay:.11s;}
+    .stat-tile:nth-child(5){animation-delay:.14s;}
+    .stat-tile:nth-child(6){animation-delay:.17s;}
+    @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+  }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="masthead-title">
+      <p class="eyebrow">Personal sailing record</p>
+      <h1>Windlog</h1>
+      <p class="tagline">Every windsurfing and windfoiling session, pulled straight from Garmin Connect GPS logs.</p>
+    </div>
+    <div class="masthead-side">
+      <span class="range-pill" id="rangeLabel">loading…</span>
+      <button class="btn-ghost" id="updateBtn" hidden>Update log</button>
+      <input type="file" id="fileInput" accept="application/json" hidden>
+    </div>
+  </header>
+
+  <section class="hero-stats" aria-label="Lifetime totals">
+    <div class="stat-tile">
+      <span class="stat-value mono" id="statSessions">—</span>
+      <span class="stat-label">Sessions logged</span>
+    </div>
+    <div class="stat-tile accent">
+      <span class="stat-value mono" id="statDays">—</span>
+      <span class="stat-label">Days on the water</span>
+    </div>
+    <div class="stat-tile">
+      <span class="stat-value mono" id="statDistance">—</span>
+      <span class="stat-label">Kilometres sailed</span>
+    </div>
+    <div class="stat-tile">
+      <span class="stat-value mono" id="statHours">—</span>
+      <span class="stat-label">Hours on the water</span>
+    </div>
+    <div class="stat-tile">
+      <span class="stat-value mono" id="statCountries">—</span>
+      <span class="stat-label">Countries sailed</span>
+    </div>
+    <div class="stat-tile" id="topSpeedTile" title="Fastest recorded burst. Excludes one GPS spike from 19 Apr 2025 (device's first day, unreliable fix).">
+      <span class="stat-value mono" id="statTopSpeed">—</span>
+      <span class="stat-label">Top speed, km/h</span>
+    </div>
+  </section>
+
+  <section class="panel-grid">
+    <div class="panel">
+      <h2>Days per year</h2>
+      <p class="panel-sub">Distinct calendar days with at least one session.</p>
+      <svg id="yearChart" width="100%" height="180" viewBox="0 0 420 180" role="img" aria-label="Days windsurfed per year"></svg>
+    </div>
+    <div class="panel">
+      <h2>Days in a period</h2>
+      <p class="panel-sub">Pick a range to see how much time on the water it holds.</p>
+      <div class="period-controls">
+        <button class="preset-btn" data-preset="30">Last 30 days</button>
+        <button class="preset-btn" data-preset="90">Last 90 days</button>
+        <button class="preset-btn" data-preset="365">Last 1 year</button>
+        <button class="preset-btn" data-preset="ytd">This year</button>
+        <button class="preset-btn active" data-preset="all">All time</button>
+        <label>From <input type="date" id="fromDate"></label>
+        <label>To <input type="date" id="toDate"></label>
+      </div>
+      <div class="period-result">
+        <div><span class="mono" id="periodDays">—</span><small>days</small></div>
+        <div><span class="mono" id="periodSessions">—</span><small>sessions</small></div>
+        <div><span class="mono" id="periodHours">—</span><small>hours</small></div>
+        <div><span class="mono" id="periodDistance">—</span><small>km</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Session calendar</h2>
+    <p class="panel-sub">Each column is a week; each cell a day. Darker means more sessions that day.</p>
+    <div class="heatmap-scroll"><div id="heatmap" class="heatmap"></div></div>
+    <div class="heatmap-legend">
+      Fewer
+      <span class="swatch l0"></span><span class="swatch l1"></span><span class="swatch l2"></span><span class="swatch l3"></span>
+      More
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Where</h2>
+    <p class="panel-sub">Ranked by number of sessions.</p>
+    <div class="location-list" id="locationList"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head-row">
+      <h2>Full log</h2>
+      <input type="search" id="logSearch" placeholder="Filter by location…" aria-label="Filter log by location">
+    </div>
+    <p class="panel-sub">Most recent first.</p>
+    <div class="table-scroll">
+      <table id="logTable">
+        <thead>
+          <tr>
+            <th class="num">#</th><th>Date</th><th>Time</th><th>Location</th>
+            <th class="num">Duration</th><th class="num">Distance</th><th class="num">Avg</th><th class="num">Max</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <p id="emptyRow">No sessions match that location.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Source: Garmin Connect activity export (<span class="mono">windsurfing_v2</span> plus anything named Windsurfing / Windfoiling). Sessions under one minute — accidental starts — are excluded. Top speed excludes one 85 km/h GPS spike logged on 19 Apr 2025. <span id="lastUpdated"></span></p>
+  </footer>
+</div>
+
+<script id="sessions-data" type="application/json">__SESSIONS_JSON__</script>
+<script>
+(function(){
+  "use strict";
+
+  var COUNTRY = {
+    "Kaunas":["Lithuania","🇱🇹"], "Rumšiškės":["Lithuania","🇱🇹"], "Teizai":["Lithuania","🇱🇹"],
+    "Kintai":["Lithuania","🇱🇹"], "Samylai":["Lithuania","🇱🇹"], "Plateliai":["Lithuania","🇱🇹"],
+    "Pastrėvys":["Lithuania","🇱🇹"], "Elektrenai":["Lithuania","🇱🇹"], "Seimena":["Lithuania","🇱🇹"],
+    "Mindauginių Maratonas":["Lithuania","🇱🇹"],
+    "Vasteras":["Sweden","🇸🇪"],
+    "Palermo":["Italy","🇮🇹"], "Arco":["Italy","🇮🇹"], "Torretta":["Italy","🇮🇹"],
+    "Puck":["Poland","🇵🇱"],
+    "Balearic Islands":["Spain","🇪🇸"],
+    "Portimão":["Portugal","🇵🇹"],
+    "Tallinn":["Estonia","🇪🇪"],
+    "Liepaja":["Latvia","🇱🇻"]
+  };
+
+  var GLITCH_DATE = "2025-04-19";
+
+  var STRIP_RE = /\b(windsurfing|windfoiling|windsurf|banglenčių sportas|banglenciu sportas)\b/gi;
+  var RACE_RE = /^(mindauginių maratonas)\b/i;
+  var NORMALIZE = {
+    "rumsiskes":"Rumšiškės", "pastrevys":"Pastrėvys", "seimenos seniunija":"Seimena",
+    "arco (garda)":"Arco", "elektrenai iqfoil, varžybos":"Elektrenai", "elektrenai wing, varžybos":"Elektrenai"
+  };
+
+  function locationOf(name){
+    var cleaned = (name||"").replace(STRIP_RE,"").trim().replace(/\s+/g," ").replace(/\(.*?\)/g,"").trim();
+    if(!cleaned) return "Unspecified";
+    var race = cleaned.match(RACE_RE);
+    if(race) return race[1].replace(/\w\S*/g, function(t){return t.charAt(0).toUpperCase()+t.substr(1).toLowerCase();});
+    return NORMALIZE[cleaned.toLowerCase()] || cleaned;
+  }
+
+  function isWind(a){
+    var t = a.activityType && a.activityType.typeKey;
+    var name = a.activityName || "";
+    return t === "windsurfing_v2" || /wind/i.test(name);
+  }
+
+  function extractSessions(rawActivities){
+    var out = [];
+    rawActivities.forEach(function(a){
+      if(!isWind(a)) return;
+      var dur = a.duration || 0;
+      if(dur < 60) return;
+      var start = a.startTimeLocal || "";
+      out.push({
+        id:a.activityId, date:start.slice(0,10), time:start.slice(11,16),
+        loc:locationOf(a.activityName),
+        dist:Math.round(((a.distance||0)/1000)*100)/100,
+        dur:Math.round(((a.duration||0)/60)*10)/10,
+        avg:Math.round(((a.averageSpeed||0)*3.6)*10)/10,
+        max:Math.round(((a.maxSpeed||0)*3.6)*10)/10
+      });
+    });
+    out.sort(function(x,y){ return (x.date+x.time) < (y.date+y.time) ? -1 : 1; });
+    return out;
+  }
+
+  var SESSIONS = JSON.parse(document.getElementById("sessions-data").textContent);
+
+  var fmtInt = new Intl.NumberFormat("en-US");
+  var fmtDate = function(d){ return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); };
+  function parseDate(s){ return new Date(s+"T00:00:00"); }
+
+  function render(){
+    var days = {};
+    SESSIONS.forEach(function(s){ days[s.date] = (days[s.date]||0)+1; });
+    var dateKeys = Object.keys(days).sort();
+    var totalDist = SESSIONS.reduce(function(a,s){return a+s.dist;},0);
+    var totalMin = SESSIONS.reduce(function(a,s){return a+s.dur;},0);
+    var countries = {};
+    SESSIONS.forEach(function(s){ var c = COUNTRY[s.loc]; if(c) countries[c[0]]=true; });
+    var topSpeedPool = SESSIONS.filter(function(s){ return s.date !== GLITCH_DATE; });
+    var topSpeed = topSpeedPool.reduce(function(m,s){ return Math.max(m, s.max); }, 0);
+
+    document.getElementById("statSessions").textContent = fmtInt.format(SESSIONS.length);
+    document.getElementById("statDays").textContent = fmtInt.format(dateKeys.length);
+    document.getElementById("statDistance").textContent = fmtInt.format(Math.round(totalDist));
+    document.getElementById("statHours").textContent = fmtInt.format(Math.round(totalMin/60));
+    document.getElementById("statCountries").textContent = fmtInt.format(Object.keys(countries).length);
+    document.getElementById("statTopSpeed").textContent = topSpeed.toFixed(1);
+
+    if(dateKeys.length){
+      document.getElementById("rangeLabel").textContent =
+        fmtDate(parseDate(dateKeys[0])) + " → " + fmtDate(parseDate(dateKeys[dateKeys.length-1]));
+    }
+    document.getElementById("lastUpdated").textContent =
+      "Log currently ends " + (dateKeys.length ? fmtDate(parseDate(dateKeys[dateKeys.length-1])) : "—") + ".";
+
+    renderYearChart(days);
+    renderHeatmap(days, dateKeys);
+    renderLocations();
+    renderTable(SESSIONS);
+    initPeriod(days, dateKeys);
+  }
+
+  function renderYearChart(days){
+    var byYear = {};
+    Object.keys(days).forEach(function(d){ var y=d.slice(0,4); byYear[y]=(byYear[y]||0)+1; });
+    var years = Object.keys(byYear).sort();
+    var svg = document.getElementById("yearChart");
+    var W=420,H=180, padL=8, padR=8, padT=32, padB=28;
+    var max = Math.max.apply(null, years.map(function(y){return byYear[y];})) || 1;
+    var innerW = W-padL-padR;
+    var bw = Math.min(70, innerW/years.length*0.5);
+    var gap = innerW/years.length;
+    var baseY = H-padB;
+    var maxBarH = baseY-padT;
+    var svgNs = "http://www.w3.org/2000/svg";
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+    var axis = document.createElementNS(svgNs,"line");
+    axis.setAttribute("x1",padL); axis.setAttribute("x2",W-padR);
+    axis.setAttribute("y1",baseY); axis.setAttribute("y2",baseY);
+    axis.setAttribute("class","axis-line");
+    svg.appendChild(axis);
+
+    years.forEach(function(y,i){
+      var v = byYear[y];
+      var h = Math.max(4, (v/max)*maxBarH);
+      var cx = padL + gap*i + gap/2;
+      var rect = document.createElementNS(svgNs,"rect");
+      rect.setAttribute("x", cx-bw/2);
+      rect.setAttribute("y", baseY-h);
+      rect.setAttribute("width", bw);
+      rect.setAttribute("height", h);
+      rect.setAttribute("rx", 4);
+      rect.setAttribute("fill", "var(--teal)");
+      svg.appendChild(rect);
+
+      var label = document.createElementNS(svgNs,"text");
+      label.setAttribute("x", cx); label.setAttribute("y", baseY-h-10);
+      label.setAttribute("text-anchor","middle");
+      label.setAttribute("class","bar-label");
+      label.textContent = v;
+      svg.appendChild(label);
+
+      var yearLabel = document.createElementNS(svgNs,"text");
+      yearLabel.setAttribute("x", cx); yearLabel.setAttribute("y", baseY+18);
+      yearLabel.setAttribute("text-anchor","middle");
+      yearLabel.textContent = y + (y === String(new Date().getFullYear()) ? " (so far)" : "");
+      svg.appendChild(yearLabel);
+    });
+  }
+
+  function renderHeatmap(days, dateKeys){
+    var el = document.getElementById("heatmap");
+    el.innerHTML = "";
+    if(!dateKeys.length) return;
+    var first = parseDate(dateKeys[0]);
+    var last = parseDate(dateKeys[dateKeys.length-1]);
+    var start = new Date(first);
+    start.setDate(start.getDate() - ((start.getDay()+6)%7));
+    var end = new Date(last);
+    end.setDate(end.getDate() + (7-((end.getDay()+6)%7)-1));
+
+    var cur = new Date(start);
+    while(cur <= end){
+      var key = cur.toISOString().slice(0,10);
+      var count = days[key] || 0;
+      var level = count===0?0:count===1?1:count===2?2:3;
+      var cell = document.createElement("div");
+      cell.className = "cell";
+      cell.setAttribute("data-level", level);
+      cell.title = key + (count ? " — "+count+" session"+(count>1?"s":"") : " — no session");
+      el.appendChild(cell);
+      cur.setDate(cur.getDate()+1);
+    }
+  }
+
+  function renderLocations(){
+    var byLoc = {};
+    SESSIONS.forEach(function(s){
+      byLoc[s.loc] = byLoc[s.loc] || {count:0, dist:0};
+      byLoc[s.loc].count++; byLoc[s.loc].dist += s.dist;
+    });
+    var rows = Object.keys(byLoc).map(function(l){ return {loc:l, count:byLoc[l].count, dist:byLoc[l].dist}; });
+    rows.sort(function(a,b){ return b.count-a.count; });
+    var max = rows[0] ? rows[0].count : 1;
+    var container = document.getElementById("locationList");
+    container.innerHTML = "";
+    rows.forEach(function(r){
+      var c = COUNTRY[r.loc];
+      var row = document.createElement("div");
+      row.className = "loc-row";
+      row.innerHTML =
+        '<span class="loc-flag">'+(c?c[1]:"—")+'</span>' +
+        '<span class="loc-name">'+escapeHtml(r.loc)+'</span>' +
+        '<span class="loc-bar-track"><span class="loc-bar-fill" style="width:'+Math.round((r.count/max)*100)+'%"></span></span>' +
+        '<span class="loc-count mono">'+r.count+' '+(r.count===1?"session":"sessions")+'</span>' +
+        '<span class="loc-dist mono">'+Math.round(r.dist)+' km</span>';
+      container.appendChild(row);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function renderTable(list){
+    var body = document.getElementById("logBody");
+    var sorted = list.slice().sort(function(a,b){ return (a.date+a.time) < (b.date+b.time) ? 1 : -1; });
+    body.innerHTML = "";
+    document.getElementById("emptyRow").style.display = sorted.length ? "none" : "block";
+    sorted.forEach(function(s, i){
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td class="num">'+(sorted.length-i)+'</td>' +
+        '<td>'+s.date+'</td>' +
+        '<td>'+s.time+'</td>' +
+        '<td class="loc-cell">'+escapeHtml(s.loc)+'</td>' +
+        '<td class="num">'+s.dur.toFixed(0)+' min</td>' +
+        '<td class="num">'+s.dist.toFixed(1)+' km</td>' +
+        '<td class="num">'+s.avg.toFixed(1)+'</td>' +
+        '<td class="num">'+s.max.toFixed(1)+'</td>';
+      body.appendChild(tr);
+    });
+  }
+
+  document.getElementById("logSearch").addEventListener("input", function(e){
+    var q = e.target.value.trim().toLowerCase();
+    var filtered = q ? SESSIONS.filter(function(s){ return s.loc.toLowerCase().indexOf(q) !== -1; }) : SESSIONS;
+    renderTable(filtered);
+  });
+
+  function initPeriod(days, dateKeys){
+    var fromInput = document.getElementById("fromDate");
+    var toInput = document.getElementById("toDate");
+    var presetBtns = Array.prototype.slice.call(document.querySelectorAll(".preset-btn"));
+    var minDate = dateKeys[0], maxDate = dateKeys[dateKeys.length-1];
+
+    function computePeriod(fromStr, toStr){
+      var from = parseDate(fromStr), to = parseDate(toStr);
+      var d = 0, sessCount = 0, dist = 0, mins = 0;
+      SESSIONS.forEach(function(s){
+        var sd = parseDate(s.date);
+        if(sd >= from && sd <= to){ sessCount++; dist += s.dist; mins += s.dur; }
+      });
+      Object.keys(days).forEach(function(k){
+        var kd = parseDate(k);
+        if(kd >= from && kd <= to) d++;
+      });
+      document.getElementById("periodDays").textContent = fmtInt.format(d);
+      document.getElementById("periodSessions").textContent = fmtInt.format(sessCount);
+      document.getElementById("periodHours").textContent = (mins/60).toFixed(1);
+      document.getElementById("periodDistance").textContent = fmtInt.format(Math.round(dist));
+    }
+
+    function setActive(btn){
+      presetBtns.forEach(function(b){ b.classList.toggle("active", b===btn); });
+    }
+
+    function applyPreset(preset){
+      var today = new Date(); today.setHours(0,0,0,0);
+      var from, to = today.toISOString().slice(0,10);
+      if(preset === "30"){ var f=new Date(today); f.setDate(f.getDate()-29); from=f.toISOString().slice(0,10); }
+      else if(preset === "90"){ var f2=new Date(today); f2.setDate(f2.getDate()-89); from=f2.toISOString().slice(0,10); }
+      else if(preset === "365"){ var f3=new Date(today); f3.setDate(f3.getDate()-364); from=f3.toISOString().slice(0,10); }
+      else if(preset === "ytd"){ from = today.getFullYear()+"-01-01"; }
+      else { from = minDate; to = maxDate; }
+      fromInput.value = from; toInput.value = to;
+      computePeriod(from, to);
+    }
+
+    presetBtns.forEach(function(btn){
+      btn.addEventListener("click", function(){
+        setActive(btn);
+        applyPreset(btn.getAttribute("data-preset"));
+      });
+    });
+    [fromInput, toInput].forEach(function(inp){
+      inp.addEventListener("change", function(){
+        presetBtns.forEach(function(b){ b.classList.remove("active"); });
+        if(fromInput.value && toInput.value) computePeriod(fromInput.value, toInput.value);
+      });
+    });
+
+    fromInput.min = minDate; fromInput.max = maxDate;
+    toInput.min = minDate; toInput.max = maxDate;
+    applyPreset("all");
+  }
+
+  render();
+
+  // ---- Update log (only on claude.ai: re-upload a fresh export, republish this page) ----
+  if(typeof claude !== "undefined" && claude && claude.use){
+    claude.use("artifact").then(function(artifact){
+      if(!artifact) return;
+      var updateBtn = document.getElementById("updateBtn");
+      var fileInput = document.getElementById("fileInput");
+      updateBtn.hidden = false;
+      updateBtn.addEventListener("click", function(){ fileInput.click(); });
+      fileInput.addEventListener("change", function(){
+        var file = fileInput.files[0];
+        if(!file) return;
+        var reader = new FileReader();
+        reader.onload = function(){
+          try{
+            var raw = JSON.parse(reader.result);
+            var newSessions = extractSessions(raw);
+            var newHtml = document.documentElement.outerHTML.replace(
+              document.getElementById("sessions-data").textContent,
+              JSON.stringify(newSessions)
+            );
+            newHtml = "<!doctype html>\n" + newHtml;
+            updateBtn.textContent = "Saving…";
+            artifact.publish(newHtml).then(function(){
+              updateBtn.textContent = "Update log";
+            }).catch(function(){
+              updateBtn.textContent = "Update log";
+              alert("Couldn't save — this view may be read-only.");
+            });
+          }catch(err){
+            alert("Couldn't read that file. Export it with garmin_export.py and try again.");
+          }
+        };
+        reader.readAsText(file);
+        fileInput.value = "";
+      });
+    });
+  }
+})();
+</script>

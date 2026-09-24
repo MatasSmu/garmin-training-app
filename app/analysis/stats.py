@@ -15,13 +15,36 @@ N_TWA = int(180 / TWA_BIN)
 SPD_BIN_KN = 0.25
 N_SPD = 240  # up to 60 kn
 MIN_BIN_S = 15.0
+MIN_BIN_FRAC = 0.004  # of all polar time
+BEST_VMG_FRAC = 0.25
 HR_ZONES = [(1, 0.50, 0.60), (2, 0.60, 0.70), (3, 0.70, 0.80), (4, 0.80, 0.90), (5, 0.90, 9.99)]
 GRID_M = 40.0
 
 
+HOLD_HALF_S = 4
+HOLD_BAND_DEG = 15.0
+
+
+def held_course(c: Clean) -> np.ndarray:
+    """True where the heading stays inside a HOLD_BAND_DEG band over +-HOLD_HALF_S
+    samples -- excludes slow bear-aways/luffs that never trip the turn-rate
+    limit but aren't a course anyone holds (they pollute polars badly)."""
+    out = np.zeros(len(c.t), dtype=bool)
+    w = 2 * HOLD_HALF_S + 1
+    for s, e in c.segments:
+        if e - s < w:
+            continue
+        un = np.degrees(np.unwrap(np.radians(c.heading[s:e])))
+        win = np.lib.stride_tricks.sliding_window_view(un, w)
+        ok = (win.max(axis=1) - win.min(axis=1)) < HOLD_BAND_DEG
+        out[s + HOLD_HALF_S:e - HOLD_HALF_S] = ok
+    return out
+
+
 def sailing_mask(c: Clean, mans: list[dict], cfg: dict) -> np.ndarray:
-    """Steady sailing: moving, not turning, not inside a maneuver, good fix."""
+    """Steady sailing: moving, holding a course, not inside a maneuver, good fix."""
     m = (c.speed > cfg["stop_kn"] / KN) & (np.abs(c.turn) < cfg["steady_turn_dps"]) & c.good & (c.dt > 0)
+    m &= held_course(c)
     for mv in mans:
         m[mv["i0"]:mv["i_rec"] + 1] = False
     return m
@@ -77,43 +100,54 @@ def polar_from_hist(entries: list[list[float]], min_s: float = MIN_BIN_S) -> dic
     for tb, sb, s in entries:
         H[int(tb), int(sb)] += s
     centers = (np.arange(N_SPD) + 0.5) * SPD_BIN_KN
+    # a bin needs an absolute AND a relative amount of time: a few seconds of
+    # luffing into the wind with momentum must not become a polar point
+    floor = max(min_s, MIN_BIN_FRAC * H.sum())
     bins = []
     for k in range(N_TWA):
         row = H[k]
         tot = row.sum()
-        if tot < min_s:
+        if tot < floor:
             bins.append({"twa": k * TWA_BIN + TWA_BIN / 2, "seconds": round(float(tot), 1),
-                         "mean": None, "p50": None, "p90": None, "max": None})
+                         "mean": None, "p50": None, "p75": None, "p90": None, "max": None})
             continue
         cdf = np.cumsum(row) / tot
         q = lambda p: float(centers[min(int(np.searchsorted(cdf, p)), N_SPD - 1)])  # noqa: E731
         nzr = np.flatnonzero(row)
         bins.append({"twa": k * TWA_BIN + TWA_BIN / 2, "seconds": round(float(tot), 1),
                      "mean": round(float(np.sum(row * centers) / tot), 2),
-                     "p50": round(q(0.5), 2), "p90": round(q(0.9), 2),
+                     "p50": round(q(0.5), 2), "p75": round(q(0.75), 2), "p90": round(q(0.9), 2),
                      "max": round(float(centers[nzr[-1]]), 2)})
     return {"bins": bins, **best_vmg(bins)}
 
 
 def best_vmg(bins: list[dict], key: str = "p90") -> dict:
-    up = dn = None
-    for b in bins:
-        v = b.get(key)
-        if v is None:
+    """Best-VMG angle per side, only among angles you actually sail regularly
+    (>= BEST_VMG_FRAC of that side's busiest bin), never pinching inside 25 deg
+    or running beyond 170 deg; beam reaches (80-100) are neither."""
+    out = {}
+    for side, lo, hi in (("best_upwind", 25.0, 80.0), ("best_downwind", 100.0, 170.0)):
+        cands = [b for b in bins if b.get(key) is not None and lo <= b["twa"] <= hi]
+        if not cands:
+            out[side] = None
             continue
-        vmg = v * np.cos(np.radians(b["twa"]))
-        if b["twa"] < 90 and (up is None or vmg > up["vmg_kn"]):
-            up = {"twa": b["twa"], "kn": v, "vmg_kn": round(float(vmg), 2)}
-        if b["twa"] > 90 and (dn is None or -vmg > dn["vmg_kn"]):
-            dn = {"twa": b["twa"], "kn": v, "vmg_kn": round(float(-vmg), 2)}
-    return {"best_upwind": up, "best_downwind": dn}
+        busiest = max(b["seconds"] for b in cands)
+        best = None
+        for b in cands:
+            if b["seconds"] < BEST_VMG_FRAC * busiest:
+                continue
+            vmg = abs(b[key] * np.cos(np.radians(b["twa"])))
+            if best is None or vmg > best["vmg_kn"]:
+                best = {"twa": b["twa"], "kn": b[key], "vmg_kn": round(float(vmg), 2)}
+        out[side] = best
+    return out
 
 
-def target_speed_fn(polar: dict | None):
-    """Per-|TWA| target speed (kn) interpolated from a polar's p90 curve."""
+def target_speed_fn(polar: dict | None, key: str = "p75"):
+    """Per-|TWA| target speed (kn) interpolated from one of a polar's curves."""
     if not polar:
         return None
-    pts = [(b["twa"], b["p90"]) for b in polar["bins"] if b.get("p90") is not None]
+    pts = [(b["twa"], b[key]) for b in polar["bins"] if b.get(key) is not None]
     if len(pts) < 3:
         return None
     x, y = np.array(pts).T
@@ -122,9 +156,13 @@ def target_speed_fn(polar: dict | None):
 
 def resolve_targets(cfg: dict, session_polar: dict, personal_polar: dict | None) -> dict:
     tg = cfg["targets"]
+    key = f"p{int(tg.get('percentile') or 75)}"
+    if key not in ("p50", "p75", "p90"):
+        key = "p75"
     polar = personal_polar if (personal_polar and personal_polar.get("best_upwind")) else session_polar
-    src = "personal polar" if polar is personal_polar else "session polar"
-    up, dn = polar.get("best_upwind") or {}, polar.get("best_downwind") or {}
+    src = ("personal polar" if polar is personal_polar else "session polar") + f" {key}"
+    best = best_vmg(polar["bins"], key)
+    up, dn = best.get("best_upwind") or {}, best.get("best_downwind") or {}
     out = {
         "mode": tg.get("mode", "polar"),
         "upwind_kn": up.get("kn"), "upwind_twa": up.get("twa"),
@@ -139,7 +177,8 @@ def resolve_targets(cfg: dict, session_polar: dict, personal_polar: dict | None)
     for side in ("upwind", "downwind"):
         kn, a = out[f"{side}_kn"], out[f"{side}_twa"]
         out[f"{side}_vmg_kn"] = round(abs(kn * np.cos(np.radians(a))), 2) if kn and a else None
-    out["_speed_fn"] = target_speed_fn(polar) if out["source"] != "manual" else None
+    out["percentile"] = key
+    out["_speed_fn"] = target_speed_fn(polar, key) if out["source"] != "manual" else None
     return out
 
 

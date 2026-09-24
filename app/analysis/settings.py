@@ -12,7 +12,7 @@ import copy
 import hashlib
 import json
 
-ENGINE_VERSION = "1.0.0"
+ENGINE_VERSION = "1.1.2"
 
 SPORTS = {
     # key: (label, on-state name, on kn, off kn)
@@ -52,7 +52,8 @@ DEFAULTS: dict = {
     "wind_prior_deg": None,        # soft hint to decide which end of the axis is upwind
     "wind_prior_source": None,     # "open-meteo" | "device" | "manual" -- sets its weight
     # --- targets (knots / degrees). mode: "polar" uses the personal polar.
-    "targets": {"mode": "polar", "upwind_kn": None, "upwind_twa": None,
+    # percentile: which polar curve polar-mode targets come from (50/75/90)
+    "targets": {"mode": "polar", "percentile": 75, "upwind_kn": None, "upwind_twa": None,
                 "downwind_kn": None, "downwind_twa": None},
     # --- HR
     "max_hr": None,                # None -> from file, else 190

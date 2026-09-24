@@ -4,11 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training</title>
-<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon-192.png">
+<link rel="manifest" href="/static/manifest.json" crossorigin="use-credentials">
 <meta name="theme-color" content="#0093A8">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,380;0,9..144,480;0,9..144,600;0,9..144,680;1,9..144,480;1,9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/tracks.css">
 </head>
 <body>
 <div class="page">
@@ -22,6 +26,7 @@
   <nav class="tab-nav">
     <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
     <button class="tab-btn" data-tab="sessions">Sessions</button>
+    <button class="tab-btn" data-tab="tracks">Tracks</button>
     <button class="tab-btn" data-tab="calendar">Calendar</button>
     <button class="tab-btn" data-tab="journal">Journal</button>
     <button class="tab-btn" data-tab="coach">Coach</button>
@@ -65,13 +70,17 @@
           <thead>
             <tr>
               <th>Date</th><th>Time</th><th>Type</th><th>Location</th>
-              <th class="num">Duration</th><th class="num">Distance</th><th class="num">Calories</th>
+              <th class="num">Duration</th><th class="num">Distance</th><th class="num">Calories</th><th>Analysis</th>
             </tr>
           </thead>
           <tbody id="sessionsBody"></tbody>
         </table>
       </div>
     </div>
+  </section>
+
+  <section id="tab-tracks" class="tab-section">
+    <div id="tracksRoot" aria-live="polite"></div>
   </section>
 
   <section id="tab-calendar" class="tab-section">
@@ -187,6 +196,11 @@
     </div>
   </section>
 </div>
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/vendor/uPlot.iife.min.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/tracks-core.js"></script>
+<script src="/static/tracks-detail.js"></script>
+<script src="/static/tracks.js"></script>
 </body>
 </html>

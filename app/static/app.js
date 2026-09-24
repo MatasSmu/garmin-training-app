@@ -58,12 +58,18 @@
   // ---- sessions ----
   var ALL_SESSIONS = [];
 
+  // Sailing-type sessions can be opened in the Tracks tab's GPS analysis.
+  function isWaterSession(s) {
+    var t = (s.activity_type + " " + (s.activity_name || "")).toLowerCase();
+    return /windsurf|kiteboard|kitesurf|wingfoil|wing foil|windfoil|sailing|foil/.test(t);
+  }
+
   function renderSessionsTable() {
     var type = document.getElementById("typeFilter").value;
     var rows = type ? ALL_SESSIONS.filter(function (s) { return s.activity_type === type; }) : ALL_SESSIONS;
     var body = document.getElementById("sessionsBody");
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="7" class="empty-hint">No sessions.</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" class="empty-hint">No sessions.</td></tr>';
       return;
     }
     body.innerHTML = rows
@@ -76,7 +82,10 @@
           "</td><td>" + escapeHtml(s.activity_type) + '</td><td class="loc-cell">' +
           escapeHtml(s.location || "") + '</td><td class="num">' + durMin +
           '</td><td class="num">' + distKm + '</td><td class="num">' +
-          (s.calories ? Math.round(s.calories) : "—") + "</td></tr>"
+          (s.calories ? Math.round(s.calories) : "—") + "</td><td>" +
+          (isWaterSession(s)
+            ? '<button type="button" class="tk-btn tk-analyse" data-aid="' + escapeHtml(s.activity_id) + '">Analyse</button>'
+            : "") + "</td></tr>"
         );
       })
       .join("");

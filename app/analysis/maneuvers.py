@@ -28,6 +28,8 @@ from app.analysis.geo import KN, angdiff, circ_mean, runs
 
 ENTRY_S = 5.0
 RECOVER_CAP_S = 30.0
+LOSS_PRE_S = 10.0   # distance-lost window starts this long before the crossing
+LOSS_POST_S = 20.0  # ... and ends this long after it
 
 
 def _seg_id(c: Clean) -> np.ndarray:
@@ -120,18 +122,46 @@ def detect(c: Clean, twa: np.ndarray, vmg: np.ndarray, state: np.ndarray, cfg: d
         seg_min = slice(start, end + 1)
         imin = start + int(np.argmin(c.speed[seg_min]))
 
-        rec = end
-        seg_end = next(e for s, e in c.segments if s <= end < e)
-        rec_cap = c.t[start] + RECOVER_CAP_S + (c.t[end] - c.t[start])
-        while rec + 1 < seg_end and c.speed[rec] < 0.9 * v_entry and c.t[rec + 1] <= rec_cap:
-            rec += 1
-        recovered = bool(c.speed[rec] >= 0.9 * v_entry)
+        # steady speed/VMG well before and well after the turn
+        seg_s, seg_e = next((s, e) for s, e in c.segments if s <= ic < e)
+        tc = c.t[ic]
 
+        def window(a: float, b: float) -> slice:
+            i = max(seg_s, int(np.searchsorted(c.t, tc + a, side="left")))
+            j = min(seg_e, int(np.searchsorted(c.t, tc + b, side="right")))
+            return slice(i, max(i, j))
+
+        pre, post = window(-LOSS_PRE_S - 10, -LOSS_PRE_S), window(LOSS_POST_S, LOSS_POST_S + 10)
+        v_post = float(np.median(c.speed[post])) if post.stop > post.start else v_exit
+
+        # recovery: until speed is back to 90 % of the slower of the steady
+        # speeds either side (the new leg may simply be a slower angle)
+        rec = max(end, imin)
+        rec_target = 0.9 * min(v_entry, v_post)
+        rec_cap = c.t[start] + RECOVER_CAP_S + (c.t[end] - c.t[start])
+        while rec + 1 < seg_e and c.speed[rec] < rec_target and c.t[rec + 1] <= rec_cap:
+            rec += 1
+        recovered = bool(c.speed[rec] >= rec_target)
+        span = float(c.t[rec] - c.t[start])
+
+        # distance lost: fixed window around the crossing, against the mean of
+        # the steady VMG before and after -- comparable across tacks & gybes
         vmg_entry = float(np.mean(vmg[ent])) if ent.stop > ent.start else float(vmg[start])
         direction = 1.0 if vmg_entry >= 0 else -1.0
-        span = float(c.t[rec] - c.t[start])
-        progress = float(direction * np.sum(vmg[start + 1:rec + 1] * c.dt[start + 1:rec + 1]))
-        loss_m = abs(vmg_entry) * span - progress
+        vmg_pre = float(np.mean(vmg[pre])) if pre.stop - pre.start >= 3 else vmg_entry
+        if post.stop - post.start >= 3:
+            vmg_post = float(np.mean(vmg[post]))
+        else:
+            vmg_post = float(np.mean(vmg[ext])) if ext.stop > ext.start else vmg_entry
+        # upwind -> downwind (or back) around one turn is a mark rounding, not
+        # a tack/gybe on a leg: "distance lost" has no meaning there
+        rounding = vmg_pre * vmg_post < 0 and min(abs(vmg_pre), abs(vmg_post)) > 1.0
+        loss_m = None
+        if not rounding:
+            ref_vmg = 0.5 * (abs(vmg_pre) + abs(vmg_post))
+            lw = window(-LOSS_PRE_S, LOSS_POST_S)
+            made = float(direction * np.sum(vmg[lw.start + 1:lw.stop] * c.dt[lw.start + 1:lw.stop]))
+            loss_m = round(ref_vmg * float(c.dt[lw.start + 1:lw.stop].sum()) - made, 1)
 
         on = state[start:end + 1]
         hr = c.hr[start:rec + 1]
@@ -142,7 +172,7 @@ def detect(c: Clean, twa: np.ndarray, vmg: np.ndarray, state: np.ndarray, cfg: d
             "t0": float(c.t[start]), "t1": float(c.t[end]), "tc": float(c.t[ic]),
             "lat": float(c.lat[ic]), "lon": float(c.lon[ic]),
             "from_side": "port" if sa > 0 else "starboard",
-            "direction": "upwind" if direction > 0 else "downwind",
+            "direction": "rounding" if rounding else "upwind" if direction > 0 else "downwind",
             "turn": "right" if net < 0 else "left",
             "duration_s": round(float(c.t[end] - c.t[start]), 1),
             "entry_kn": round(v_entry * KN, 2),
@@ -153,7 +183,7 @@ def detect(c: Clean, twa: np.ndarray, vmg: np.ndarray, state: np.ndarray, cfg: d
             "exit_twa": round(float(np.median(np.abs(twa[b0:min(b1, b0 + 8)]))), 1),
             "turn_deg": round(float(abs(net)), 0),
             "recovery_s": round(span, 1), "recovered": recovered,
-            "distance_lost_m": round(loss_m, 1),
+            "distance_lost_m": loss_m,
             "success": bool(on.all()),
             "state_at_entry": bool(state[start]), "state_at_exit": bool(state[end]),
             "hr_avg": round(float(hr.mean()), 0) if len(hr) else None,

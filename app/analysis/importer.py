@@ -4,6 +4,7 @@
     python -m app.analysis.importer samples/*.fit samples/*.gpx
     python -m app.analysis.importer --garmin-since 2026-06-01   # water sessions already synced
     python -m app.analysis.importer --reanalyze                 # refresh every cached analysis
+    python -m app.analysis.importer --if-empty samples/*        # first-run seeding (start.sh)
 """
 
 from __future__ import annotations
@@ -29,10 +30,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--garmin-since", help="download + import water sessions synced since this date")
     ap.add_argument("--reanalyze", action="store_true")
     ap.add_argument("--no-conditions", action="store_true", help="skip the Open-Meteo lookup")
+    ap.add_argument("--if-empty", action="store_true", help="only import when there are no tracks yet (first run)")
     args = ap.parse_args(argv)
 
     conn = get_connection()
     init_db(conn)
+    if args.if_empty and conn.execute("SELECT 1 FROM tracks LIMIT 1").fetchone():
+        return 0
     failures = 0
     for f in args.files:
         t0 = time.time()

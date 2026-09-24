@@ -62,15 +62,9 @@ class GarminUnavailable(RuntimeError):
     """Saved Garmin tokens are missing/expired, or Garmin can't be reached."""
 
 
-def fetch_original_file(activity_id: int) -> tuple[bytes, str]:
-    """The activity's original upload (usually a .fit) as (bytes, filename).
-
-    Only uses saved tokens -- never prompts -- so it's safe to call from the
-    web app. Re-run the sync from a terminal to refresh expired tokens.
-    """
-    import io
-    import zipfile
-
+def login_saved_tokens():
+    """Log in with the tokens saved in ~/.garminconnect -- never prompts, so
+    it's safe inside the web app. Raises GarminUnavailable with a fix-it hint."""
     from garminconnect import Garmin
 
     from app.config import TOKEN_DIR
@@ -78,8 +72,25 @@ def fetch_original_file(activity_id: int) -> tuple[bytes, str]:
     try:
         client = Garmin()
         client.login(str(TOKEN_DIR.expanduser()))
-        blob = client.download_activity(str(activity_id), dl_fmt=Garmin.ActivityDownloadFormat.ORIGINAL)
+        return client
     except Exception as e:  # noqa: BLE001 -- garminconnect raises a zoo of types
+        raise GarminUnavailable(
+            f"Garmin login with the saved tokens failed ({type(e).__name__}). "
+            "Sign in again once from a terminal: ./venv/bin/python garmin_export.py"
+        ) from e
+
+
+def fetch_original_file(activity_id: int, client=None) -> tuple[bytes, str]:
+    """The activity's original upload (usually a .fit) as (bytes, filename)."""
+    import io
+    import zipfile
+
+    from garminconnect import Garmin
+
+    client = client or login_saved_tokens()
+    try:
+        blob = client.download_activity(str(activity_id), dl_fmt=Garmin.ActivityDownloadFormat.ORIGINAL)
+    except Exception as e:  # noqa: BLE001
         raise GarminUnavailable(f"Couldn't download from Garmin ({type(e).__name__}): {e}") from e
     if blob[:2] == b"PK":
         with zipfile.ZipFile(io.BytesIO(blob)) as zf:

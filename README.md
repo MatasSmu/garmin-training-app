@@ -38,6 +38,16 @@ and for the **Analyse** button; uploads and samples work without them.
 Weather comes from Open-Meteo (free, no key) and map tiles from Esri /
 OpenStreetMap, so those features need internet.
 
+## Keeping data up to date
+
+* **Sync Garmin** button (top right of every page): pulls new activities and
+  health metrics since just before your newest synced activity, then
+  downloads + analyses any new water sessions for the Session map. It runs in
+  the background (usually 5–30 s) and refreshes every tab when done.
+* The `garmin-sync.timer` systemd unit does the same Garmin sync daily at 06:15.
+* Both only use the saved tokens in `~/.garminconnect`; if they expire the
+  button says so — sign in again once with `./venv/bin/python garmin_export.py`.
+
 ## Getting sessions in
 
 * **Upload** `.fit` / `.gpx` files on *Session map → Sessions* (drag & drop, several at once).

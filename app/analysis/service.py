@@ -129,6 +129,44 @@ def import_bytes(conn: sqlite3.Connection, data: bytes, filename: str, *,
     return tid, True
 
 
+WATER_WORDS = ("windsurf", "kiteboard", "kitesurf", "wing", "foil", "sailing")
+
+
+def is_water_session(activity_type: str | None, name: str | None) -> bool:
+    text = f"{activity_type or ''} {name or ''}".lower()
+    return any(w in text for w in WATER_WORDS)
+
+
+def import_garmin_water(conn, since: str, *, client=None, fetch_conditions: bool = True,
+                        on_item=None) -> dict:
+    """Download + analyse every synced water session since `since` that has
+    no track yet. Raises GarminUnavailable if Garmin can't be used at all."""
+    from app.ingest.garmin_client import fetch_original_file, login_saved_tokens
+
+    rows = [r for r in conn.execute(
+        "SELECT s.activity_id, s.activity_type, s.activity_name, s.start_date FROM sessions s "
+        "LEFT JOIN tracks t ON t.activity_id = s.activity_id "
+        "WHERE s.start_date >= ? AND t.id IS NULL ORDER BY s.start_date", (since,)).fetchall()
+        if is_water_session(r["activity_type"], r["activity_name"])]
+    out = {"imported": 0, "failed": 0, "errors": [], "ids": []}
+    if not rows:
+        return out
+    client = client or login_saved_tokens()
+    for k, r in enumerate(rows):
+        if on_item:
+            on_item(k + 1, len(rows), r)
+        data, name = fetch_original_file(r["activity_id"], client=client)
+        try:
+            tid, created = import_bytes(conn, data, name, activity_id=r["activity_id"],
+                                        fetch_conditions=fetch_conditions)
+            out["imported"] += int(created)
+            out["ids"].append(tid)
+        except ValueError as e:  # e.g. an indoor session with no GPS
+            out["failed"] += 1
+            out["errors"].append(f"{r['start_date']} {r['activity_name']}: {e}")
+    return out
+
+
 def import_path(conn, path: str | Path, **kw) -> tuple[int, bool]:
     p = Path(path)
     return import_bytes(conn, p.read_bytes(), p.name, **kw)

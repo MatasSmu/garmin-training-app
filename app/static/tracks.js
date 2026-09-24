@@ -596,6 +596,14 @@
       alert(err.message);
     });
   });
+  // After the header's Sync button pulls new data: forget the activity map and
+  // re-render the Session map view if it's open.
+  document.addEventListener("garmin-synced", function () {
+    byActivity = null;
+    OPTS = null;
+    var r = parse();
+    if (isOurs(r) && r.root === "tracks") route();
+  });
   new MutationObserver(refreshActivityButtons).observe(document.getElementById("sessionsBody"), { childList: true });
 
   route();

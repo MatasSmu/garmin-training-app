@@ -42,8 +42,8 @@ from app.ingest.transform import (
 )
 
 
-def run_sync(start: date, end: date, token_dir: Path = DEFAULT_TOKEN_DIR) -> dict:
-    client = connect(token_dir)
+def run_sync(start: date, end: date, token_dir: Path = DEFAULT_TOKEN_DIR, client=None) -> dict:
+    client = client or connect(token_dir)
     conn = get_connection()
     init_db(conn)
 

@@ -98,13 +98,15 @@
         ALL_SESSIONS = sessions;
         var types = Array.from(new Set(sessions.map(function (s) { return s.activity_type; }))).sort();
         var select = document.getElementById("typeFilter");
+        var current = select.value;
+        while (select.options.length > 1) select.remove(1); // reloads (after a sync) rebuild the list
         types.forEach(function (t) {
           var opt = document.createElement("option");
           opt.value = t;
           opt.textContent = t;
           select.appendChild(opt);
         });
-        select.addEventListener("change", renderSessionsTable);
+        if (types.indexOf(current) >= 0) select.value = current;
         renderSessionsTable();
       });
   }
@@ -698,6 +700,80 @@
         });
       });
   }
+
+  document.getElementById("typeFilter").addEventListener("change", renderSessionsTable);
+
+  // ---- Garmin sync button ----
+  var syncBtn = document.getElementById("syncBtn");
+  var syncLabel = document.getElementById("syncLabel");
+  var syncStatus = document.getElementById("syncStatus");
+  var syncTimer = null;
+
+  function fmtSynced(iso) {
+    if (!iso) return "Not synced yet";
+    var d = new Date(iso);
+    var mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return "Updated just now";
+    if (mins < 60) return "Updated " + mins + " min ago";
+    var hm = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    var today = new Date();
+    if (d.toDateString() === today.toDateString()) return "Updated today " + hm;
+    var y = new Date(today.getTime() - 86400000);
+    if (d.toDateString() === y.toDateString()) return "Updated yesterday " + hm;
+    return "Updated " + d.toISOString().slice(0, 10) + " " + hm;
+  }
+
+  function showSync(st, justFinished) {
+    var busy = !!st.running;
+    syncBtn.disabled = busy;
+    syncBtn.classList.toggle("busy", busy);
+    syncBtn.setAttribute("aria-busy", busy ? "true" : "false");
+    syncLabel.textContent = busy ? "Syncing…" : "Sync Garmin";
+    syncStatus.classList.toggle("err", !busy && st.ok === false);
+    if (busy) syncStatus.textContent = st.step || "Syncing…";
+    else if (justFinished && st.message) syncStatus.textContent = st.message + " " + fmtSynced(st.last_synced) + ".";
+    else if (st.ok === false && st.message) syncStatus.textContent = st.message;
+    else syncStatus.textContent = fmtSynced(st.last_synced);
+  }
+
+  function pollSync() {
+    fetch("/api/sync")
+      .then(function (r) { return r.json(); })
+      .then(function (st) {
+        if (st.running) {
+          showSync(st);
+          syncTimer = setTimeout(pollSync, 1500);
+          return;
+        }
+        syncTimer = null;
+        showSync(st, true);
+        if (st.ok) {
+          loadDashboard();
+          loadSessions();
+          loadCalendar();
+          loadJournal();
+          document.dispatchEvent(new CustomEvent("garmin-synced"));
+        }
+      })
+      .catch(function () {
+        syncTimer = setTimeout(pollSync, 4000);
+      });
+  }
+
+  syncBtn.addEventListener("click", function () {
+    showSync({ running: true, step: "Starting…" });
+    fetch("/api/sync", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function () { if (!syncTimer) pollSync(); })
+      .catch(function () {
+        showSync({ running: false, ok: false, message: "Couldn't reach the app — try again." });
+      });
+  });
+
+  fetch("/api/sync")
+    .then(function (r) { return r.json(); })
+    .then(function (st) { showSync(st); if (st.running) pollSync(); })
+    .catch(function () {});
 
   loadDashboard();
   loadSessions();

@@ -58,7 +58,7 @@
   // ---- sessions ----
   var ALL_SESSIONS = [];
 
-  // Sailing-type sessions can be opened in the Tracks tab's GPS analysis.
+  // Sailing-type sessions can be opened in the Session map tab's GPS analysis.
   function isWaterSession(s) {
     var t = (s.activity_type + " " + (s.activity_name || "")).toLowerCase();
     return /windsurf|kiteboard|kitesurf|wingfoil|wing foil|windfoil|sailing|foil/.test(t);

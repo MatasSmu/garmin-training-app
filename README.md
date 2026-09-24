@@ -2,7 +2,7 @@
 
 A personal training app (FastAPI + SQLite + a vanilla-JS single page) that
 syncs Garmin activities and daily health metrics, keeps a journal/calendar,
-has a coach chat — and a **Tracks** tab: a GPS session analyser for
+has a coach chat — and a **Session map** tab (next to Calendar): a GPS session analyser for
 windfoil / windsurf / wingfoil / kite sessions in the spirit of WaterSpeed
 Ultra. It infers the wind from how you sailed, finds every tack and gybe,
 and gives you legs, polars, targets, splits, foiling stats, HR, race legs,
@@ -40,7 +40,7 @@ OpenStreetMap, so those features need internet.
 
 ## Getting sessions in
 
-* **Upload** `.fit` / `.gpx` files on *Tracks → Sessions* (drag & drop, several at once).
+* **Upload** `.fit` / `.gpx` files on *Session map → Sessions* (drag & drop, several at once).
 * **Analyse** button on the *Sessions* tab: for any synced water session it
   downloads the original FIT from Garmin and opens the analysis.
 * **CLI**:
@@ -106,7 +106,7 @@ tables, map markers and the API.
 | `pipeline.py` | runs it all → JSON-safe result |
 | `service.py`, `conditions.py`, `importer.py` | DB storage/caching, Open-Meteo, CLI |
 | `app/api/tracks.py`, `app/api/gear.py` | REST API |
-| `app/static/tracks*.js`, `tracks.css` | Tracks tab (Leaflet + uPlot, vendored) |
+| `app/static/tracks*.js`, `tracks.css` | Session map tab (Leaflet + uPlot, vendored) |
 
 Schema: `tracks`, `track_analysis` (gzipped result keyed by a hash of
 engine version + settings + personal-polar signature, so edits re-run the

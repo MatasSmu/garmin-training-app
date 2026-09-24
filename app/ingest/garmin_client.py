@@ -56,3 +56,35 @@ def fetch_rhr(client, start: date, end: date) -> list[dict[str, Any]]:
 def fetch_stress_and_battery(client, day: date) -> dict[str, Any]:
     """One day's stress + body battery, both embedded in get_all_day_stress()."""
     return client.get_all_day_stress(day.isoformat())
+
+
+class GarminUnavailable(RuntimeError):
+    """Saved Garmin tokens are missing/expired, or Garmin can't be reached."""
+
+
+def fetch_original_file(activity_id: int) -> tuple[bytes, str]:
+    """The activity's original upload (usually a .fit) as (bytes, filename).
+
+    Only uses saved tokens -- never prompts -- so it's safe to call from the
+    web app. Re-run the sync from a terminal to refresh expired tokens.
+    """
+    import io
+    import zipfile
+
+    from garminconnect import Garmin
+
+    from app.config import TOKEN_DIR
+
+    try:
+        client = Garmin()
+        client.login(str(TOKEN_DIR.expanduser()))
+        blob = client.download_activity(str(activity_id), dl_fmt=Garmin.ActivityDownloadFormat.ORIGINAL)
+    except Exception as e:  # noqa: BLE001 -- garminconnect raises a zoo of types
+        raise GarminUnavailable(f"Couldn't download from Garmin ({type(e).__name__}): {e}") from e
+    if blob[:2] == b"PK":
+        with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+            names = [n for n in zf.namelist() if n.lower().endswith((".fit", ".gpx"))]
+            if not names:
+                raise GarminUnavailable("Garmin's download contained no FIT/GPX file")
+            return zf.read(names[0]), names[0]
+    return blob, f"{activity_id}.fit"

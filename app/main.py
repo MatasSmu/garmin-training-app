@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import calendar, coach, dashboard, journal, metrics, sessions
+from app.api import calendar, coach, dashboard, gear, journal, metrics, sessions, tracks
 from app.auth import require_auth
 from app.db import get_connection, init_db
 
@@ -15,6 +16,8 @@ STATIC_DIR = Path(__file__).with_name("static")
 app = FastAPI(title="Training App")
 
 app.middleware("http")(require_auth)
+# Session analyses carry per-second series (~1-2 MB of JSON); gzip cuts that ~5x.
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 
 @app.middleware("http")
@@ -34,6 +37,8 @@ app.include_router(journal.router)
 app.include_router(dashboard.router)
 app.include_router(coach.router)
 app.include_router(calendar.router)
+app.include_router(tracks.router)
+app.include_router(gear.router)
 
 
 @app.get("/healthz")

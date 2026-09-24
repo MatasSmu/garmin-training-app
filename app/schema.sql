@@ -92,3 +92,62 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   updated_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(date);
+
+-- ---------------------------------------------------------------------------
+-- Session analysis (GPS tracks from FIT/GPX files). A track may link to the
+-- Garmin activity it was recorded as; analysis results are cached per
+-- settings hash so reopening a session is instant.
+CREATE TABLE IF NOT EXISTS tracks (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  activity_id      INTEGER REFERENCES sessions(activity_id) ON DELETE SET NULL,
+  file_name        TEXT NOT NULL,
+  file_sha1        TEXT NOT NULL UNIQUE,
+  file_path        TEXT NOT NULL,            -- relative to data/tracks/
+  sport            TEXT NOT NULL,
+  title            TEXT,
+  start_utc        REAL NOT NULL,            -- epoch seconds
+  end_utc          REAL NOT NULL,
+  utc_offset_s     INTEGER NOT NULL DEFAULT 0,
+  start_date       TEXT NOT NULL,            -- local 'YYYY-MM-DD'
+  lat              REAL,
+  lon              REAL,
+  spot             TEXT,
+  notes            TEXT,
+  settings_json    TEXT NOT NULL DEFAULT '{}',  -- user overrides for the engine
+  conditions_json  TEXT,                        -- wind/temps, manual or Open-Meteo
+  summary_json     TEXT,                        -- headline numbers for lists/trends/filters
+  polar_hist_json  TEXT,                        -- mergeable polar histogram
+  grid_json        TEXT,                        -- speed-map cells
+  polar_sig        TEXT,
+  analysis_hash    TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tracks_start ON tracks(start_utc);
+CREATE INDEX IF NOT EXISTS idx_tracks_activity ON tracks(activity_id);
+
+CREATE TABLE IF NOT EXISTS track_analysis (
+  track_id     INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+  hash         TEXT NOT NULL,
+  result_gz    BLOB NOT NULL,
+  computed_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gear (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind        TEXT NOT NULL CHECK (kind IN ('board', 'sail', 'fin', 'foil', 'wing', 'kite', 'other')),
+  name        TEXT NOT NULL,
+  brand       TEXT,
+  size        TEXT,
+  notes       TEXT,
+  retired     INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS track_gear (
+  track_id  INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  gear_id   INTEGER NOT NULL REFERENCES gear(id) ON DELETE CASCADE,
+  PRIMARY KEY (track_id, gear_id)
+);
+CREATE INDEX IF NOT EXISTS idx_track_gear_gear ON track_gear(gear_id);

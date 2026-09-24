@@ -71,6 +71,25 @@ def fetch(lat: float, lon: float, start_utc: float, end_utc: float, timeout: flo
     return None
 
 
+NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
+
+
+def place_name(lat: float, lon: float, timeout: float = 10.0) -> str | None:
+    """Best-effort spot name for a position (OpenStreetMap Nominatim, one
+    call per imported track -- well inside its usage policy)."""
+    try:
+        r = httpx.get(NOMINATIM, params={"lat": round(lat, 4), "lon": round(lon, 4), "format": "jsonv2", "zoom": 12},
+                      headers={"User-Agent": "personal-training-app/1.0 (session analysis)"}, timeout=timeout)
+        r.raise_for_status()
+        addr = r.json().get("address", {})
+    except (httpx.HTTPError, ValueError):
+        return None
+    for key in ("village", "town", "city", "hamlet", "suburb", "municipality", "county"):
+        if addr.get(key):
+            return str(addr[key])
+    return None
+
+
 def _sea_temp(lat, lon, d0, d1, idx, timeout) -> float | None:
     try:
         r = httpx.get(MARINE, params={"latitude": round(lat, 4), "longitude": round(lon, 4),

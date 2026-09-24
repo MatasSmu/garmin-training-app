@@ -107,6 +107,8 @@ def import_bytes(conn: sqlite3.Connection, data: bytes, filename: str, *,
     if act is not None and act["location"] and act["location"] != "Unspecified":
         spot = act["location"]
     spot = spot or _nearest_spot(conn, lat, lon)
+    if spot is None and fetch_conditions:
+        spot = conditions_mod.place_name(lat, lon)
     sport = guess_sport(act["activity_name"] if act else None, track.meta.get("sport_name"),
                         filename, track.meta.get("fit_sport"))
     title = (act["activity_name"] if act else None) or track.meta.get("sport_name") or Path(filename).stem

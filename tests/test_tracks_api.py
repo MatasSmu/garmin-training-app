@@ -33,6 +33,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(conditions, "fetch", lambda *a, **k: {
         "source": "open-meteo (test)", "wind_kn": 14.0, "gust_kn": 20.0, "wind_dir": 350, "air_c": 16.0,
         "water_c": None, "hourly": []})
+    monkeypatch.setattr(conditions, "place_name", lambda *a, **k: None)
     app.dependency_overrides[get_db] = _db
     with TestClient(app, headers=AUTH) as c:
         yield c

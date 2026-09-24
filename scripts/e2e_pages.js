@@ -137,7 +137,9 @@ function watch(page, errors) {
       await new Promise((r) => setTimeout(r, 1500));
       const n = await page.evaluate(() => document.querySelectorAll(".tk-analyse").length);
       const open = await page.evaluate(() => Array.from(document.querySelectorAll(".tk-analyse")).filter((b) => b.textContent === "Open").length);
-      if (!n) errors.push("no Analyse buttons on the Sessions tab");
+      const water = await api("/api/sessions?limit=500").then((rows) => rows.filter((s) =>
+        /windsurf|kiteboard|kitesurf|wingfoil|wing foil|windfoil|sailing|foil/.test((s.activity_type + " " + (s.activity_name || "")).toLowerCase())).length);
+      if (water && !n) errors.push("no Analyse buttons on the Sessions tab");
       info.analyse = n + " analyse buttons, " + open + " open";
     }
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "view-" + (v.replace(/[#/,]/g, "_") || "home") + ".png"), fullPage: true });

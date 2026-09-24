@@ -65,7 +65,7 @@
       root.appendChild(subnav(view));
       var body = el("div");
       root.appendChild(body);
-      ({ list: renderList, progress: renderProgress, polar: renderPolar, map: renderSpeedMap, gear: renderGear }[view] || renderList)(body);
+      ({ list: renderList, progress: renderProgress, polar: renderPolar, map: renderSpeedMap, gear: renderGear, ai: renderAI }[view] || renderList)(body);
     }).catch(function (e) {
       root.textContent = "";
       root.appendChild(el("p", { class: "tk-msg err", text: "Couldn't load tracks: " + e.message }));
@@ -86,7 +86,7 @@
 
   function subnav(active) {
     var nav = el("nav", { class: "tk-subnav", "aria-label": "Tracks views" });
-    [["list", "Sessions"], ["progress", "Progress"], ["polar", "Personal polar"], ["map", "Speed map"], ["gear", "Gear"]].forEach(function (v) {
+    [["list", "Sessions"], ["progress", "Progress"], ["polar", "Personal polar"], ["map", "Speed map"], ["gear", "Gear"], ["ai", "Baselines & AI"]].forEach(function (v) {
       nav.appendChild(el("a", { href: "#tracks" + (v[0] === "list" ? "" : "/" + v[0]), class: v[0] === active ? "active" : null,
         "aria-current": v[0] === active ? "page" : null, text: v[1] }));
     });
@@ -112,7 +112,7 @@
     }
     if (fields.indexOf("sport") >= 0) sel("Sport", "sport", [["", "All sports"]].concat(OPTS.sports.map(function (s) { return [s.key, s.label]; })));
     if (fields.indexOf("spot") >= 0) sel("Spot", "spot", [["", "All spots"]].concat(OPTS.spots.map(function (s) { return [s.spot, s.spot + " (" + s.sessions + ")"]; })));
-    if (fields.indexOf("gear") >= 0) sel("Gear", "gear_id", [["", "Any gear"]].concat(OPTS.gear.map(function (g) { return [g.id, g.kind + ": " + g.name]; })));
+    if (fields.indexOf("gear") >= 0) sel("Gear", "gear_id", [["", "Any gear"]].concat(OPTS.gear.map(function (g) { return [g.id, TK.gearText(g)]; })));
     if (fields.indexOf("wind") >= 0) { num("Wind ≥ kn", "wind_min", "any"); num("Wind ≤ kn", "wind_max", "any"); }
     if (fields.indexOf("dir") >= 0) sel("Wind from", "wind_dir", [["", "Any direction"]].concat(COMPASS16.map(function (c, i) { return [i * 22.5, c + " (" + i * 22.5 + "°)"]; })));
     return bar;
@@ -365,25 +365,29 @@
   }
 
   // ------------------------------------------------------------------ gear
+  function gearOption(g) { return (g.code || g.name) + (g.code && g.name && g.name !== g.code ? " · " + g.name : "") + (g.retired ? " (retired)" : ""); }
+
   function renderGear(body) {
-    var panel = TK.panel("Gear log", "Boards, sails, fins, foils, wings and kites. Attach gear on a session's page; hours and distance add up here.");
+    var panel = TK.panel("Gear inventory", "iQFOIL parts by code (e.g. SC 392 899 — matched ignoring case and spaces), plus fins, foils, wings and kites. Pick them on a session's page; hours and distance add up here.");
     var msg = el("p", { class: "tk-msg" });
     var f = el("div", { class: "tk-form" });
     var editing = null;
     var kind = el("select");
-    OPTS.gear_kinds.forEach(function (k) { kind.appendChild(el("option", { value: k, text: k })); });
-    var name = el("input", { type: "text", maxlength: 120, placeholder: "e.g. Freefoil 125" });
+    OPTS.gear_kinds.forEach(function (k) { kind.appendChild(el("option", { value: k, text: TK.GEAR_LABEL[k] || k })); });
+    var code = el("input", { type: "text", maxlength: 60, placeholder: "e.g. SC 392 899" });
+    var name = el("input", { type: "text", maxlength: 120, placeholder: "optional — defaults to the code" });
     var brand = el("input", { type: "text", maxlength: 120 });
-    var size = el("input", { type: "text", maxlength: 60, placeholder: "e.g. 7.0 m² / 1000 cm²" });
+    var size = el("input", { type: "text", maxlength: 60, placeholder: "e.g. 9.0 m² / 1000 cm²" });
     var notes = el("input", { type: "text", maxlength: 2000 });
     var retired = el("input", { type: "checkbox" });
-    f.appendChild(el("label", null, ["Kind", kind]));
+    f.appendChild(el("label", null, ["Part", kind]));
+    f.appendChild(el("label", null, ["Code", code]));
     f.appendChild(el("label", null, ["Name", name]));
     f.appendChild(el("label", null, ["Brand", brand]));
     f.appendChild(el("label", null, ["Size", size]));
-    f.appendChild(el("label", null, ["Notes", notes]));
+    f.appendChild(el("label", null, ["Note", notes]));
     f.appendChild(el("label", { style: { flexDirection: "row", alignItems: "center", gap: "6px" } }, [retired, "Retired"]));
-    var save = el("button", { class: "tk-btn primary", type: "button", text: "Add gear" });
+    var save = el("button", { class: "tk-btn primary", type: "button", text: "Add part" });
     var cancel = el("button", { class: "tk-btn", type: "button", text: "Cancel", style: { display: "none" } });
     var del = el("button", { class: "tk-btn danger", type: "button", text: "Delete", style: { display: "none" } });
     f.appendChild(el("div", { class: "row-actions" }, [save, cancel, del]));
@@ -392,46 +396,210 @@
     var box = el("div");
     panel.appendChild(box);
     body.appendChild(panel);
+    var setupBox = el("div");
+    body.appendChild(setupBox);
 
     function reset() {
-      editing = null; name.value = brand.value = size.value = notes.value = ""; retired.checked = false;
-      save.textContent = "Add gear"; cancel.style.display = del.style.display = "none";
+      editing = null; code.value = name.value = brand.value = size.value = notes.value = ""; retired.checked = false;
+      save.textContent = "Add part"; cancel.style.display = del.style.display = "none";
     }
     function edit(g) {
-      editing = g.id; kind.value = g.kind; name.value = g.name; brand.value = g.brand || ""; size.value = g.size || ""; notes.value = g.notes || "";
+      editing = g.id; kind.value = g.kind; code.value = g.code || ""; name.value = g.name === g.code ? "" : g.name;
+      brand.value = g.brand || ""; size.value = g.size || ""; notes.value = g.notes || "";
       retired.checked = !!g.retired; save.textContent = "Save changes"; cancel.style.display = del.style.display = "";
-      name.focus();
+      code.focus();
     }
     cancel.addEventListener("click", reset);
     del.addEventListener("click", function () {
-      if (!confirm("Delete this gear? It's removed from every session it was attached to.")) return;
+      if (!confirm("Delete this part? It's removed from every session and setup it was in.")) return;
       TK.api("/api/gear/" + editing, { method: "DELETE" }).then(function () { reset(); load(); });
     });
     save.addEventListener("click", function () {
-      var bodyJ = { kind: kind.value, name: name.value.trim(), brand: brand.value.trim() || null, size: size.value.trim() || null, notes: notes.value.trim() || null, retired: retired.checked };
-      if (!bodyJ.name) { msg.className = "tk-msg err"; msg.textContent = "Name is required."; return; }
+      var bodyJ = { kind: kind.value, code: code.value.trim() || null, name: name.value.trim() || code.value.trim(),
+        brand: brand.value.trim() || null, size: size.value.trim() || null, notes: notes.value.trim() || null, retired: retired.checked };
+      if (!bodyJ.name) { msg.className = "tk-msg err"; msg.textContent = "Enter a code (or a name for gear without one)."; return; }
       TK.api(editing ? "/api/gear/" + editing : "/api/gear", { method: editing ? "PATCH" : "POST", body: bodyJ })
         .then(function () { msg.className = "tk-msg"; msg.textContent = "Saved."; reset(); load(); })
         .catch(function (e) { msg.className = "tk-msg err"; msg.textContent = e.message; });
     });
+    var order = {};
+    OPTS.gear_kinds.forEach(function (k, i) { order[k] = i; });
     function load() {
-      TK.api("/api/gear").then(function (rows) {
+      Promise.all([TK.api("/api/gear"), TK.api("/api/gear/setups")]).then(function (res) {
+        var rows = res[0];
         box.textContent = "";
         box.appendChild(TK.table([
-          { key: "kind", label: "Kind" },
-          { key: "name", label: "Name", fmt: function (g) { return g.name + (g.retired ? " (retired)" : ""); } },
-          { key: "brand", label: "Brand" },
-          { key: "size", label: "Size" },
+          { key: "kind", label: "Part", sort: function (g) { return order[g.kind]; }, fmt: function (g) { return TK.GEAR_LABEL[g.kind] || g.kind; } },
+          { key: "code", label: "Code", fmt: function (g) { return (g.code || "—") + (g.retired ? " (retired)" : ""); } },
+          { key: "name", label: "Name", fmt: function (g) { return g.name === g.code ? "" : g.name; } },
+          { key: "notes", label: "Note" },
           { key: "sessions", label: "Sessions", num: true },
           { key: "hours", label: "Hours", num: true, fmt: function (g) { return TK.num(g.hours, 1); } },
           { key: "km", label: "km", num: true, fmt: function (g) { return TK.num(g.km, 0); } },
-          { key: "nm", label: "nm", num: true, fmt: function (g) { return TK.num(g.nm, 0); } },
           { key: "max_kn", label: "Top kn", num: true, fmt: function (g) { return g.max_kn ? TK.kn(g.max_kn) : "—"; } },
           { key: "last_used", label: "Last used" },
-        ], rows, { onRow: edit, empty: "No gear yet — add your first board or sail above." }));
+        ], rows, { onRow: edit, sortKey: "kind", empty: "No gear yet — add your first board, wing or sail above." }));
+        setupBox.textContent = "";
+        setupBox.appendChild(setupsPanel(rows, res[1], load));
       });
     }
     load();
+  }
+
+  // A setup = one part per iQFOIL slot, applied to a session in one click.
+  function setupsPanel(gear, setups, reload) {
+    var panel = TK.panel("Setups", "Save the combinations you sail most, then apply one on a session's page and swap single parts if needed.");
+    var msg = el("p", { class: "tk-msg" });
+    var f = el("div", { class: "tk-form" });
+    var editing = null;
+    var name = el("input", { type: "text", maxlength: 120, placeholder: "e.g. Race 9.0 / light wind" });
+    var notes = el("input", { type: "text", maxlength: 2000 });
+    f.appendChild(el("label", null, ["Name", name]));
+    f.appendChild(el("label", null, ["Note", notes]));
+    var slots = {};
+    OPTS.sail_parts.forEach(function (k) {
+      var s = el("select");
+      s.appendChild(el("option", { value: "", text: "—" }));
+      gear.filter(function (g) { return g.kind === k; }).forEach(function (g) { s.appendChild(el("option", { value: g.id, text: gearOption(g) })); });
+      slots[k] = s;
+      f.appendChild(el("label", null, [TK.GEAR_LABEL[k], s]));
+    });
+    var save = el("button", { class: "tk-btn primary", type: "button", text: "Save setup" });
+    var cancel = el("button", { class: "tk-btn", type: "button", text: "Cancel", style: { display: "none" } });
+    var del = el("button", { class: "tk-btn danger", type: "button", text: "Delete", style: { display: "none" } });
+    f.appendChild(el("div", { class: "row-actions" }, [save, cancel, del]));
+    panel.appendChild(f);
+    panel.appendChild(msg);
+
+    function reset() {
+      editing = null; name.value = notes.value = "";
+      Object.keys(slots).forEach(function (k) { slots[k].value = ""; });
+      save.textContent = "Save setup"; cancel.style.display = del.style.display = "none";
+    }
+    function edit(s) {
+      reset();
+      editing = s.id; name.value = s.name; notes.value = s.notes || "";
+      s.parts.forEach(function (p) { if (slots[p.kind]) slots[p.kind].value = p.id; });
+      save.textContent = "Save changes"; cancel.style.display = del.style.display = "";
+      name.focus();
+    }
+    cancel.addEventListener("click", reset);
+    del.addEventListener("click", function () {
+      if (!confirm("Delete this setup? Sessions keep their gear.")) return;
+      TK.api("/api/gear/setups/" + editing, { method: "DELETE" }).then(reload);
+    });
+    save.addEventListener("click", function () {
+      var ids = Object.keys(slots).map(function (k) { return +slots[k].value; }).filter(Boolean);
+      var bodyJ = { name: name.value.trim(), notes: notes.value.trim() || null, gear_ids: ids };
+      if (!bodyJ.name) { msg.className = "tk-msg err"; msg.textContent = "Give the setup a name."; return; }
+      TK.api(editing ? "/api/gear/setups/" + editing : "/api/gear/setups", { method: editing ? "PATCH" : "POST", body: bodyJ })
+        .then(reload)
+        .catch(function (e) { msg.className = "tk-msg err"; msg.textContent = e.message; });
+    });
+    panel.appendChild(TK.table([
+      { key: "name", label: "Setup" },
+      { key: "parts", label: "Parts", sortable: false, fmt: function (s) {
+        var d = el("div");
+        s.parts.forEach(function (p) { d.appendChild(el("span", { class: "pill", text: (TK.GEAR_LABEL[p.kind] || p.kind) + " " + (p.code || p.name) })); });
+        return d;
+      } },
+      { key: "notes", label: "Note" },
+    ], setups, { onRow: edit, empty: "No setups yet." }));
+    return panel;
+  }
+
+  // ------------------------------------------------------------------ baselines & AI summaries
+  function renderAI(body) {
+    var bp = TK.panel("Wind-band baselines", null);
+    var wp = TK.panel("Weekly sailing summaries", "Built by DeepSeek from the stored session analyses of that week (never raw data). The last finished week is summarised automatically by the Garmin sync.");
+    var rp = TK.panel("Month / season reviews", "Built from the weekly summaries only.");
+    var up = TK.panel("DeepSeek usage", "Every call, with tokens (cached prompt tokens are ~10× cheaper) and the estimated cost.");
+    [bp, wp, rp, up].forEach(function (p) { body.appendChild(p); });
+
+    function fail(p) { return function (e) { p.appendChild(el("p", { class: "tk-msg err", text: e.message })); }; }
+
+    TK.api("/api/sailing/baselines").then(function (d) {
+      bp.appendChild(el("p", { class: "panel-sub", text: "Personal bests and the rolling average of the last " + d.rolling_n +
+        " sessions per wind band, and per band + " + d.match_parts.map(function (k) { return TK.GEAR_LABEL[k].toLowerCase(); }).join(" + ") +
+        ". A gear combo is used once it has " + d.min_combo_sessions + " sessions; sessions under " + d.wind_bands[0][0] + " kn are left out." }));
+      var cols = [
+        { key: "band", label: "Wind", sortable: false, fmt: function (b) { return TK.bandLabel(b.band); } },
+        { key: "gear_label", label: "Gear", sortable: false, fmt: function (b) { return b.gear_key ? b.gear_label + (b.enough_data ? "" : " (needs " + d.min_combo_sessions + ")") : "All gear"; } },
+        { key: "sessions", label: "Sessions", num: true, sortable: false },
+      ];
+      TK.SAIL_METRICS.forEach(function (m) {
+        cols.push({ key: m[0], label: m[1].replace(" (kn)", "").replace(" (°)", "") + " best / avg", num: true, sortable: false, fmt: function (b) {
+          return TK.num(b.best[m[0]], m[2]) + " / " + TK.num(b.rolling_avg[m[0]], m[2]);
+        } });
+      });
+      bp.appendChild(TK.table(cols, d.baselines, { rowClass: function (b) { return b.gear_key ? "sub" : null; },
+        empty: "No windfoil sessions with wind ≥ " + d.wind_bands[0][0] + " kn yet." }));
+    }).catch(fail(bp));
+
+    function aiCard(title, sub, res, keys) {
+      var c = el("div", { class: "tk-ai" });
+      c.appendChild(el("h3", { text: title }));
+      if (sub) c.appendChild(el("p", { class: "tk-hint", text: sub }));
+      c.appendChild(el("p", { text: res.summary }));
+      keys.forEach(function (k) {
+        var v = res[k[0]];
+        if (!v || (Array.isArray(v) && !v.length)) return;
+        c.appendChild(el("h4", { text: k[1] }));
+        if (Array.isArray(v)) c.appendChild(el("ul", null, v.map(function (x) { return el("li", { text: x }); })));
+        else c.appendChild(el("p", { text: v }));
+      });
+      return c;
+    }
+
+    function actionRow(p, controls, label, run) {
+      var msg = el("p", { class: "tk-msg", "aria-live": "polite" });
+      var btn = el("button", { class: "tk-btn primary", type: "button", text: label });
+      btn.addEventListener("click", function () {
+        btn.disabled = true; msg.className = "tk-msg"; msg.textContent = "Asking DeepSeek…";
+        run().then(function () { route(); }).catch(function (e) { btn.disabled = false; msg.className = "tk-msg err"; msg.textContent = e.message; });
+      });
+      p.appendChild(el("div", { class: "tk-form" }, controls.concat([el("div", { class: "row-actions" }, [btn])])));
+      p.appendChild(msg);
+    }
+
+    var wk = el("input", { type: "date", value: new Date().toISOString().slice(0, 10) });
+    actionRow(wp, [el("label", null, ["Any day of the week", wk])], "Summarise that week", function () {
+      return TK.api("/api/sailing/weekly", { method: "POST", body: { week: wk.value || null } });
+    });
+    TK.api("/api/sailing/weekly").then(function (rows) {
+      if (!rows.length) wp.appendChild(el("p", { class: "tk-hint", text: "No weekly summaries yet." }));
+      rows.forEach(function (w) {
+        wp.appendChild(aiCard("Week of " + w.week_start, w.track_ids.length + " session" + (w.track_ids.length === 1 ? "" : "s") + " · written " + w.created_at.slice(0, 10),
+          w.result, [["progress", "Progress"], ["recurring_issues", "Recurring issues"], ["focus_next_week", "Focus next week"], ["plan_adjustment", "Plan adjustment"]]));
+      });
+    }).catch(fail(wp));
+
+    var kind = el("select", null, [el("option", { value: "month", text: "This month" }), el("option", { value: "season", text: "This season (calendar year)" })]);
+    actionRow(rp, [el("label", null, ["Period", kind])], "Write review", function () {
+      return TK.api("/api/sailing/reviews", { method: "POST", body: { kind: kind.value } });
+    });
+    TK.api("/api/sailing/reviews").then(function (rows) {
+      rows.forEach(function (r) {
+        rp.appendChild(aiCard((r.kind === "month" ? "Month " : "Season ") + r.start_date + " – " + r.end_date,
+          r.weeks.length + " weekly summaries · written " + r.created_at.slice(0, 10), r.result,
+          [["trends", "Trends"], ["strengths", "Strengths"], ["weaknesses", "Weaknesses"], ["priorities", "Priorities"]]));
+      });
+    }).catch(fail(rp));
+
+    TK.api("/api/sailing/usage").then(function (u) {
+      var t = u.totals;
+      up.appendChild(el("p", { class: "tk-msg", text: t.calls + " calls (" + t.ok + " ok) · " + t.prompt_tokens + " prompt tokens (" +
+        t.cache_hit_tokens + " cached) + " + t.completion_tokens + " output · ≈ $" + (+t.cost_usd).toFixed(4) }));
+      up.appendChild(TK.table([
+        { key: "created_at", label: "When", fmt: function (r) { return r.created_at.slice(0, 16).replace("T", " "); } },
+        { key: "purpose", label: "What", fmt: function (r) { return r.purpose + (r.ref ? " " + r.ref : ""); } },
+        { key: "prompt_tokens", label: "Prompt", num: true },
+        { key: "cache_hit_tokens", label: "Cached", num: true },
+        { key: "completion_tokens", label: "Output", num: true },
+        { key: "cost_usd", label: "≈ $", num: true, fmt: function (r) { return r.cost_usd === null ? "—" : r.cost_usd.toFixed(5); } },
+        { key: "ok", label: "Result", fmt: function (r) { return r.ok ? "ok" : (r.error || "failed"); } },
+      ], u.calls, { maxHeight: "360px", empty: "No DeepSeek calls yet." }));
+    }).catch(fail(up));
   }
 
   // ------------------------------------------------------------------ compare

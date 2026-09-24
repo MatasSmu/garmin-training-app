@@ -15,6 +15,7 @@ from app.coach.metrics import (
 )
 from app.coach.responder import generate_response
 from app.coach.wind import forecast_briefing
+from app.sailing.reports import planner_focus
 
 
 def build_context(conn: sqlite3.Connection) -> dict:
@@ -31,6 +32,7 @@ def build_context(conn: sqlite3.Connection) -> dict:
         "journal": recent_journal(conn, 14),
         "wind_briefing": forecast_briefing(conn),
         "calendar": calendar_outlook(conn),
+        "sailing_focus": planner_focus(conn),
     }
 
 

@@ -71,6 +71,7 @@
 
     buildMap(mapPanel);
     buildCharts(chartPanel);
+    if (OPTS.sail_sports.indexOf(tr.sport) >= 0) root.appendChild(sailingPanel());
     root.appendChild(maneuverPanel());
     root.appendChild(legsPanel());
     var g2 = el("div", { class: "tk-grid-even" });
@@ -102,7 +103,7 @@
     left.appendChild(el("h2", { text: tr.title || "Session" }));
     var when = tr.start_date + " · " + TK.clock(s.start_utc, tr.utc_offset_s) + "–" + TK.clock(s.end_utc, tr.utc_offset_s);
     left.appendChild(el("div", { class: "meta", text: [when, tr.spot, TK.SPORT_LABEL[tr.sport] || tr.sport,
-      (tr.gear || []).map(function (g) { return g.name; }).join(", ")].filter(Boolean).join(" · ") }));
+      (tr.gear || []).map(function (g) { return g.code || g.name; }).join(", ")].filter(Boolean).join(" · ") }));
     h.appendChild(left);
     var actions = el("div", { class: "actions" });
     actions.appendChild(el("a", { class: "tk-btn", href: "#tracks?compare=" + tr.id, text: "Compare…" }));
@@ -979,6 +980,109 @@
     ], rows, { onRow: clickable ? function (r) { focusRange(r.i0, r.i1); } : null, empty: "No legs." });
   }
 
+  // ================================================================== iQFOIL: vs baseline + DeepSeek analysis
+  function sailingPanel() {
+    var wrap = el("div", { class: "tk-grid-even" });
+    var bp = TK.panel("vs baseline", null);
+    var ap = TK.panel("Coach analysis", null);
+    wrap.appendChild(bp);
+    wrap.appendChild(ap);
+    bp.appendChild(el("p", { class: "tk-msg", text: "Loading…" }));
+    var id = D.id, polls = 0;
+
+    function load() {
+      TK.api("/api/sailing/sessions/" + id).then(function (st) {
+        if (!D || D.id !== id) return;  // navigated away
+        renderBaseline(st);
+        renderAnalysis(st);
+        if (st.running && polls++ < 40) setTimeout(load, 3000);
+      }).catch(function (e) { bp.textContent = ""; bp.appendChild(el("p", { class: "tk-msg err", text: e.message })); });
+    }
+
+    function renderBaseline(st) {
+      bp.textContent = "";
+      bp.appendChild(el("h2", { text: "vs baseline" }));
+      if (!st.eligible) { bp.appendChild(el("p", { class: "tk-msg", text: st.reason })); return; }
+      var b = st.baseline;
+      var head = "Wind " + TK.num(st.wind_kn, 1) + " kn → band " + TK.bandLabel(st.band) + ". ";
+      if (!b.sessions) {
+        bp.appendChild(el("p", { class: "panel-sub", text: head }));
+        bp.appendChild(el("p", { class: "tk-msg", text: "No earlier sessions in this band yet — this one becomes the baseline." }));
+        return;
+      }
+      var what = b.level === "band+gear" ? "same " + st.match_parts.map(function (k) { return TK.GEAR_LABEL[k].toLowerCase(); }).join(" + ") + " (" + b.gear_label + ")" : "all gear";
+      bp.appendChild(el("p", { class: "panel-sub", text: head + "Compared with " + b.sessions + " earlier session" + (b.sessions === 1 ? "" : "s") +
+        " in this band with " + what + "; averages over the last " + b.rolling_n + "." }));
+      if (b.fallback) bp.appendChild(el("div", { class: "tk-warn", role: "status", text: "Band-only baseline: " + b.fallback_reason + "." }));
+      var rows = TK.SAIL_METRICS.map(function (m) { return Object.assign({ key: m[0], label: m[1], nd: m[2] }, st.comparison[m[0]]); });
+      bp.appendChild(TK.table([
+        { key: "label", label: "Metric", sortable: false },
+        { key: "value", label: "This session", num: true, sortable: false, fmt: function (r) { return TK.num(r.value, r.nd) + (r.new_best ? " ★" : ""); } },
+        { key: "rolling_avg", label: "Rolling avg", num: true, sortable: false, fmt: function (r) { return TK.num(r.rolling_avg, r.nd); } },
+        { key: "pct_vs_avg", label: "Δ vs avg", num: true, sortable: false, fmt: function (r) {
+          if (r.pct_vs_avg === null || r.pct_vs_avg === undefined) return "—";
+          return el("span", { class: "tk-delta " + (r.better === true ? "good" : r.better === false ? "bad" : ""),
+            text: (r.pct_vs_avg > 0 ? "+" : "") + r.pct_vs_avg.toFixed(1) + " %" + (r.better === true ? " ▲" : r.better === false ? " ▼" : "") });
+        } },
+        { key: "best", label: "Best", num: true, sortable: false, fmt: function (r) { return TK.num(r.best, r.nd); } },
+      ], rows));
+      bp.appendChild(el("p", { class: "tk-hint", text: "▲ better / ▼ worse than your average (a lower upwind angle is better). ★ new personal best for this baseline." }));
+    }
+
+    function renderAnalysis(st) {
+      ap.textContent = "";
+      ap.appendChild(el("h2", { text: "Coach analysis" }));
+      var a = st.analysis;
+      var msg = el("p", { class: "tk-msg", "aria-live": "polite" });
+      var btn = el("button", { class: "tk-btn" + (a ? "" : " primary"), type: "button", text: a ? "Re-analyze" : "Analyze with DeepSeek",
+        disabled: !st.eligible || !st.ai_enabled || st.running });
+      btn.addEventListener("click", function () {
+        btn.disabled = true; msg.className = "tk-msg"; msg.textContent = "Asking DeepSeek… (10–30 s)";
+        TK.api("/api/sailing/sessions/" + id + "/analyze", { method: "POST" })
+          .then(function (s) { renderBaseline(s); renderAnalysis(s); })
+          .catch(function (e) { btn.disabled = false; msg.className = "tk-msg err"; msg.textContent = e.message; });
+      });
+      if (st.running) msg.textContent = "Analysing in the background…";
+      else if (!st.ai_enabled) msg.textContent = "Set DEEPSEEK_API_KEY to enable AI analysis.";
+      else if (!a && st.eligible) msg.textContent = "Not analysed yet. Tag the front wing and sail first for a gear-matched comparison.";
+      if (a && a.stale) ap.appendChild(el("div", { class: "tk-warn", role: "status", text: "Gear, note or wind changed since this analysis — re-analyze to update it." }));
+      if (a) ap.appendChild(analysisCard(a));
+      ap.appendChild(el("div", { class: "row-actions", style: { display: "flex", gap: "8px", marginTop: "10px" } }, [btn]));
+      ap.appendChild(msg);
+    }
+
+    load();
+    return wrap;
+  }
+
+  function analysisCard(a) {
+    var r = a.result, c = el("div", { class: "tk-ai" });
+    c.appendChild(el("p", { text: r.summary }));
+    function list(title, items, cls) {
+      if (!items || !items.length) return;
+      c.appendChild(el("h4", { text: title }));
+      c.appendChild(el("ul", { class: cls || null }, items.map(function (x) { return el("li", { text: x }); })));
+    }
+    var focus = el("div", { class: "tk-focus" });
+    focus.appendChild(el("h4", { text: "Focus next session" }));
+    focus.appendChild(el("ul", null, (r.focus_next_session || []).map(function (x) { return el("li", { text: x }); })));
+    c.appendChild(focus);
+    list("Strengths", r.strengths);
+    list("Weaknesses", r.weaknesses);
+    if (r.vs_baseline) { c.appendChild(el("h4", { text: "vs baseline" })); c.appendChild(el("p", { text: r.vs_baseline })); }
+    var pc = r.possible_causes || {};
+    list("Possible causes — technique", pc.technique);
+    list("Possible causes — gear", pc.gear);
+    list("Possible causes — fatigue / recovery", pc.fatigue_recovery);
+    if (r.plan_adjustment) { c.appendChild(el("h4", { text: "Plan adjustment" })); c.appendChild(el("p", { text: r.plan_adjustment })); }
+    var u = a.usage || {};
+    c.appendChild(el("p", { class: "tk-hint", text: [(a.model || "DeepSeek") + " · " + a.created_at.slice(0, 16).replace("T", " ") + " UTC",
+      u.prompt_tokens ? u.prompt_tokens + " prompt tokens (" + (u.cache_hit_tokens || 0) + " cached) + " + u.completion_tokens + " output" : null,
+      u.cost_usd !== null && u.cost_usd !== undefined ? "≈ $" + u.cost_usd.toFixed(5) : null,
+      "packet ≈ " + a.packet_tokens + " tokens"].filter(Boolean).join(" · ") }));
+    return c;
+  }
+
   // ================================================================== info (notes, spot, gear, conditions)
   function infoPanel() {
     var tr = D.A.track, O = D.OPTS, cond = tr.conditions || {};
@@ -989,19 +1093,43 @@
     var spot = el("input", { type: "text", maxlength: 80, value: tr.spot || "", list: "tkSpotList" });
     var dl = el("datalist", { id: "tkSpotList" });
     O.spots.forEach(function (s) { dl.appendChild(el("option", { value: s.spot })); });
-    var notes = el("textarea", { maxlength: 5000 });
+    var notes = el("textarea", { maxlength: 5000, placeholder: "How you felt, conditions, setup changes (mast rake, outhaul, downhaul…)" });
     notes.value = tr.notes || "";
     f.appendChild(el("label", null, ["Title", title]));
     f.appendChild(el("label", null, ["Spot", spot, dl]));
-    f.appendChild(el("label", { class: "wide" }, ["Notes", notes]));
-    var gearBox = el("div", { class: "tk-gear-pick" });
+    f.appendChild(el("label", { class: "wide" }, ["Session note", notes]));
+    // gear: one dropdown per iQFOIL part (a setup fills them all), checkboxes for the rest
     var mine = {};
     (tr.gear || []).forEach(function (g) { mine[g.id] = true; });
-    O.gear.filter(function (g) { return !g.retired || mine[g.id]; }).forEach(function (g) {
-      gearBox.appendChild(el("label", null, [el("input", { type: "checkbox", value: g.id, checked: !!mine[g.id] }), g.kind + ": " + g.name + (g.size ? " " + g.size : "")]));
+    var usable = O.gear.filter(function (g) { return !g.retired || mine[g.id]; });
+    var slots = {};
+    var slotBox = el("div", { class: "tk-form tk-slots" });
+    var setupSel = el("select");
+    setupSel.appendChild(el("option", { value: "", text: O.setups.length ? "Apply a setup…" : "No setups yet" }));
+    O.setups.forEach(function (s) { setupSel.appendChild(el("option", { value: s.id, text: s.name })); });
+    setupSel.addEventListener("change", function () {
+      var s = O.setups.filter(function (x) { return String(x.id) === setupSel.value; })[0];
+      if (!s) return;
+      Object.keys(slots).forEach(function (k) { slots[k].value = ""; });
+      s.parts.forEach(function (p) { if (slots[p.kind]) slots[p.kind].value = p.id; });
     });
-    if (!O.gear.length) gearBox.appendChild(el("span", { class: "tk-hint", html: 'No gear yet — add boards, sails, fins and foils under <a href="#tracks/gear">Gear</a>.' }));
-    f.appendChild(el("label", { class: "wide" }, ["Gear used", gearBox]));
+    slotBox.appendChild(el("label", null, ["Setup", setupSel]));
+    O.sail_parts.forEach(function (k) {
+      var sel = el("select");
+      sel.appendChild(el("option", { value: "", text: "—" }));
+      usable.filter(function (g) { return g.kind === k; }).forEach(function (g) {
+        sel.appendChild(el("option", { value: g.id, text: (g.code || g.name) + (g.code && g.name !== g.code ? " · " + g.name : ""), selected: !!mine[g.id] }));
+      });
+      slots[k] = sel;
+      slotBox.appendChild(el("label", null, [TK.GEAR_LABEL[k], sel]));
+    });
+    f.appendChild(el("div", { class: "wide", style: { gridColumn: "1 / -1" } }, [slotBox]));
+    var gearBox = el("div", { class: "tk-gear-pick" });
+    usable.filter(function (g) { return O.sail_parts.indexOf(g.kind) < 0; }).forEach(function (g) {
+      gearBox.appendChild(el("label", null, [el("input", { type: "checkbox", value: g.id, checked: !!mine[g.id] }), TK.gearText(g) + (g.size ? " " + g.size : "")]));
+    });
+    if (gearBox.childNodes.length) f.appendChild(el("label", { class: "wide" }, ["Other gear", gearBox]));
+    if (!O.gear.length) f.appendChild(el("p", { class: "tk-hint", style: { gridColumn: "1 / -1" }, html: 'No gear yet — add parts by code and save setups under <a href="#tracks/gear">Gear</a>.' }));
     // conditions
     var cw = el("input", { type: "number", min: 0, max: 100, step: 0.5, value: cond.wind_kn === undefined || cond.wind_kn === null ? "" : cond.wind_kn });
     var cg = el("input", { type: "number", min: 0, max: 150, step: 0.5, value: cond.gust_kn === undefined || cond.gust_kn === null ? "" : cond.gust_kn });
@@ -1017,8 +1145,9 @@
     var acts = el("div", { class: "row-actions" });
     function numOrNull(i) { return i.value === "" ? null : +i.value; }
     acts.appendChild(el("button", { class: "tk-btn primary", type: "button", text: "Save", onclick: function () {
-      var body = { title: title.value, spot: spot.value, notes: notes.value,
-        gear_ids: Array.prototype.map.call(gearBox.querySelectorAll("input:checked"), function (i) { return +i.value; }) };
+      var ids = Array.prototype.map.call(gearBox.querySelectorAll("input:checked"), function (i) { return +i.value; })
+        .concat(Object.keys(slots).map(function (k) { return +slots[k].value; }).filter(Boolean));
+      var body = { title: title.value, spot: spot.value, notes: notes.value, gear_ids: ids };
       var newCond = { wind_kn: numOrNull(cw), gust_kn: numOrNull(cg), wind_dir: numOrNull(cd), air_c: numOrNull(ca), water_c: numOrNull(cwt) };
       var changed = ["wind_kn", "gust_kn", "wind_dir", "air_c", "water_c"].some(function (k) { return (cond[k] === undefined ? null : cond[k]) !== newCond[k]; });
       if (changed) body.conditions = newCond;

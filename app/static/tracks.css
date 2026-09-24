@@ -172,3 +172,19 @@ details.panel[open] > summary{margin-bottom:14px;}
   .tk-head h2{font-size:21px;}
   .tk-tile .v{font-size:17px;}
 }
+
+/* ---- iQFOIL baseline + coach analysis ---------------------------------- */
+.tk-delta{font-weight:600;}
+.tk-delta.good{color:var(--done);}
+.tk-delta.bad{color:var(--block);}
+.tk-slots{grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2);}
+.tk-table tr.sub td:first-child{color:var(--ink-faint);}
+.tk-ai{font-size:14px; line-height:1.5; color:var(--ink);}
+.tk-ai + .tk-ai{border-top:1px solid var(--border); margin-top:14px; padding-top:14px;}
+.tk-ai h3{font-size:15px; margin:0 0 2px;}
+.tk-ai h4{font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-muted); margin:12px 0 4px;}
+.tk-ai p{margin:4px 0;}
+.tk-ai ul{margin:0; padding-left:18px;}
+.tk-ai li{margin:2px 0;}
+.tk-focus{background:var(--teal-soft); border-radius:10px; padding:8px 12px 10px; margin:10px 0;}
+.tk-focus h4{margin-top:2px; color:var(--teal-strong);}

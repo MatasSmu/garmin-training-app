@@ -30,6 +30,8 @@ service; after pulling code changes run `systemctl --user restart garmin-app`
 | `APP_USERNAME`, `APP_PASSWORD` | yes | Basic-auth login for every page and API call (the app binds to the LAN) |
 | `DEEPSEEK_API_KEY` | no | Enables the LLM coach chat; without it the coach uses fixed templates |
 | `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` | no | Override the coach endpoint / model |
+| `SAIL_MATCH_PARTS` | no | Parts that must match for a gear baseline (default `front_wing,sail`) |
+| `DEEPSEEK_PRICE_CACHE_HIT`, `…_CACHE_MISS`, `…_OUTPUT` | no | USD per 1M tokens, only for the cost estimate in the usage log |
 | `PORT`, `HOST` | no | Only read by `start.sh` (defaults 8731 / 0.0.0.0) |
 
 Garmin login tokens live in `~/.garminconnect` (created by
@@ -87,6 +89,47 @@ direction) with 2–4-way **compare**, **progress** trends, **personal polar**,
 a **speed map** per spot filtered by wind direction, and a **gear log** with
 hours / km / nm / top speed per item.
 
+## iQFOIL coach analysis (DeepSeek)
+
+Each windfoil session is compared with your own history **in the same wind
+band with the same gear**, and only that compact comparison goes to the model.
+
+* **Gear** (*Session map → Gear*): an inventory of parts — board, front wing,
+  back wing, foil mast, fuselage, sail, mast, boom — by code (`SC 392 899`,
+  stored as typed, matched ignoring case and spaces), plus saved **setups**.
+  On a session's page pick a setup, swap single parts, and write a session
+  note (feel, conditions, mast rake…). Both stay editable after sync.
+* **Baselines** (`app/sailing/baselines.py`, deterministic, no LLM): wind
+  bands 6–9, 9–12, 12–16, 16–20, 20+ kn from the average wind
+  (Open-Meteo or your manual entry); sessions under 6 kn or without wind are
+  ignored. Per band and per band + front wing + sail: personal bests (VMG
+  up / down, max 2 s speed, lowest upwind angle), rolling averages of the last
+  10 sessions, and counts. A gear combo with fewer than 3 earlier sessions
+  falls back to the band baseline and says so. A session is judged only
+  against sessions *before* it. The stored table is rebuilt after every
+  import, edit, gear change or delete. All limits live in `app/sailing/config.py`.
+* **Packet** (`packet.py`, typically ~500 tokens, capped at 1500): headline
+  stats, wind, gear, note, the matching baseline with % vs rolling average,
+  port vs starboard, and that day's HRV / 7-day HRV / sleep score. No track
+  points. See it at `GET /api/sailing/sessions/{id}/packet`.
+* **The call** (`prompts.py`, `deepseek.py`): the role, the athlete profile
+  (edit `ATHLETE_PROFILE` in `prompts.py`) and the metric guide are one fixed
+  prefix shared by every call type, so DeepSeek's prompt cache covers it;
+  the packet goes last. JSON mode, validated (summary, strengths, weaknesses,
+  vs_baseline, possible_causes {technique, gear, fatigue_recovery},
+  focus_next_session, plan_adjustment), one retry on bad output. Every attempt
+  is logged in `llm_usage` with tokens, cached tokens and estimated cost
+  (*Session map → Baselines & AI*).
+* **Cost rules**: an analysis is stored with its session and never re-run on
+  its own. It runs once automatically when you first save the front wing +
+  sail on a session, and otherwise only from **Analyze / Re-analyze**. If gear,
+  note or wind change afterwards, the card says it's out of date.
+* **Weekly summaries** are built from the stored session analyses only
+  (the Garmin sync writes last week's once; or on demand), and **month /
+  season reviews** only from weekly summaries.
+* The **Coach** chat (the weekly planner) gets each recent session's
+  `focus_next_session` and the latest weekly focus in its briefing.
+
 ## Tests & checks
 
 ```bash
@@ -116,12 +159,14 @@ tables, map markers and the API.
 | `pipeline.py` | runs it all → JSON-safe result |
 | `service.py`, `conditions.py`, `importer.py` | DB storage/caching, Open-Meteo, CLI |
 | `app/api/tracks.py`, `app/api/gear.py` | REST API |
+| `app/sailing/` | iQFOIL baselines, analysis packet, DeepSeek calls, weekly / season summaries (`app/api/sailing.py`) |
 | `app/static/tracks*.js`, `tracks.css` | Session map tab (Leaflet + uPlot, vendored) |
 
 Schema: `tracks`, `track_analysis` (gzipped result keyed by a hash of
 engine version + settings + personal-polar signature, so edits re-run the
-engine and unchanged sessions open instantly), `gear`, `track_gear` — see
-`app/schema.sql`.
+engine and unchanged sessions open instantly), `gear` (with part codes),
+`track_gear`, `gear_setups`, and the `sail_*` / `llm_usage` tables of the
+iQFOIL analysis — see `app/schema.sql`.
 
 ## Algorithms and their assumptions
 

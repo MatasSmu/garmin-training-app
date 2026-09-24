@@ -112,7 +112,7 @@ function watch(page, errors) {
     await page.close();
   }
 
-  const views = ["#tracks", "#tracks/progress", "#tracks/polar", "#tracks/map", "#tracks/gear",
+  const views = ["#tracks", "#tracks/progress", "#tracks/polar", "#tracks/map", "#tracks/gear", "#tracks/ai",
     "#compare/" + tracks.slice(0, 3).map((t) => t.id).join(","), ""];
   for (const v of views) {
     const page = await browser.newPage();

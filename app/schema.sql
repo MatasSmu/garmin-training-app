@@ -133,9 +133,14 @@ CREATE TABLE IF NOT EXISTS track_analysis (
   computed_at  TEXT NOT NULL
 );
 
+-- iQFOIL parts (board ... boom) are identified by their code, stored as typed
+-- ("SC 392 899") and matched ignoring case and spaces. db._migrate_gear
+-- rebuilds tables created before codes existed.
 CREATE TABLE IF NOT EXISTS gear (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind        TEXT NOT NULL CHECK (kind IN ('board', 'sail', 'fin', 'foil', 'wing', 'kite', 'other')),
+  kind        TEXT NOT NULL CHECK (kind IN ('board', 'front_wing', 'back_wing', 'foil_mast', 'fuselage', 'sail',
+                                            'mast', 'boom', 'fin', 'foil', 'wing', 'kite', 'other')),
+  code        TEXT,
   name        TEXT NOT NULL,
   brand       TEXT,
   size        TEXT,
@@ -151,3 +156,82 @@ CREATE TABLE IF NOT EXISTS track_gear (
   PRIMARY KEY (track_id, gear_id)
 );
 CREATE INDEX IF NOT EXISTS idx_track_gear_gear ON track_gear(gear_id);
+
+-- Saved gear combinations to apply to a session in one go.
+CREATE TABLE IF NOT EXISTS gear_setups (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  notes       TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gear_setup_parts (
+  setup_id  INTEGER NOT NULL REFERENCES gear_setups(id) ON DELETE CASCADE,
+  gear_id   INTEGER NOT NULL REFERENCES gear(id) ON DELETE CASCADE,
+  PRIMARY KEY (setup_id, gear_id)
+);
+
+-- ---------------------------------------------------------------------------
+-- iQFOIL analysis (app/sailing). Baselines are derived data, rebuilt from
+-- tracks + track_gear after every change; gear_key '' = band-only baseline.
+CREATE TABLE IF NOT EXISTS sail_baselines (
+  band         TEXT NOT NULL,
+  gear_key     TEXT NOT NULL DEFAULT '',
+  gear_label   TEXT,
+  sessions     INTEGER NOT NULL,
+  rolling_n    INTEGER NOT NULL,
+  enough_data  INTEGER NOT NULL,
+  best_json    TEXT NOT NULL,
+  rolling_json TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (band, gear_key)
+);
+
+-- One DeepSeek analysis per session: the exact packet sent and the parsed reply.
+CREATE TABLE IF NOT EXISTS sail_session_analysis (
+  track_id     INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+  packet_json  TEXT NOT NULL,
+  result_json  TEXT NOT NULL,
+  inputs_sig   TEXT,                         -- gear + note + wind it saw; differs -> "out of date"
+  model        TEXT,
+  created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sail_weekly_summaries (
+  week_start   TEXT PRIMARY KEY,             -- Monday, local date
+  week_end     TEXT NOT NULL,
+  track_ids    TEXT NOT NULL,                -- JSON list of the analyses it was built from
+  result_json  TEXT NOT NULL,
+  model        TEXT,
+  created_at   TEXT NOT NULL
+);
+
+-- Month / season reviews, built from weekly summaries only.
+CREATE TABLE IF NOT EXISTS sail_reviews (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind         TEXT NOT NULL CHECK (kind IN ('month', 'season')),
+  start_date   TEXT NOT NULL,
+  end_date     TEXT NOT NULL,
+  weeks        TEXT NOT NULL,                -- JSON list of week_start
+  result_json  TEXT NOT NULL,
+  model        TEXT,
+  created_at   TEXT NOT NULL
+);
+
+-- Every LLM call, successful or not, with its token usage and cost estimate.
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  purpose            TEXT NOT NULL,          -- session | weekly | review
+  ref                TEXT,                   -- track id / week start / period
+  model              TEXT,
+  prompt_tokens      INTEGER,
+  completion_tokens  INTEGER,
+  cache_hit_tokens   INTEGER,
+  cache_miss_tokens  INTEGER,
+  cost_usd           REAL,
+  ok                 INTEGER NOT NULL,
+  error              TEXT,
+  created_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_ref ON llm_usage(purpose, ref);

@@ -109,6 +109,13 @@
     return isNaN(ms) ? null : ms / 1000 - (offset || 0);
   };
   TK.SPORT_LABEL = { windfoil: "Windfoil", wingfoil: "Wingfoil", kitefoil: "Kitefoil", windsurf: "Windsurf", kite: "Kite", sail: "Sailing" };
+  TK.GEAR_LABEL = { board: "Board", front_wing: "Front wing", back_wing: "Back wing", foil_mast: "Foil mast", fuselage: "Fuselage",
+    sail: "Sail", mast: "Mast", boom: "Boom", fin: "Fin", foil: "Foil", wing: "Wing", kite: "Kite", other: "Other" };
+  // iQFOIL baseline metrics: [key, label, decimals, higher is better]
+  TK.SAIL_METRICS = [["vmg_up_kn", "VMG upwind (kn)", 2, true], ["vmg_down_kn", "VMG downwind (kn)", 2, true],
+    ["max_kn", "Max speed 2 s (kn)", 1, true], ["angle_up_deg", "Upwind angle (°)", 1, false]];
+  TK.bandLabel = function (b) { return b ? b.replace("-", "–") + " kn" : "—"; };
+  TK.gearText = function (g) { return (TK.GEAR_LABEL[g.kind] || g.kind) + ": " + (g.code || g.name) + (g.code && g.name && g.name !== g.code ? " (" + g.name + ")" : ""); };
 
   // Esri's gray canvas basemap: quiet enough for coloured tracks, no API key.
   TK.grayTiles = function (dark) {

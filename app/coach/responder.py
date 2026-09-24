@@ -218,6 +218,26 @@ def _race_line(race: dict) -> str:
     return line
 
 
+def _sailing_focus_briefing(focus: dict) -> list[str]:
+    """What the per-session iQFOIL analyses asked to work on next -- the
+    input for planning the week's sailing."""
+    lines = []
+    sessions = focus.get("sessions") or []
+    if sessions:
+        lines.append("- Sailing focus from recent iQFOIL session analyses (newest first):")
+        for s in sessions:
+            where = f" at {s['spot']}" if s.get("spot") else ""
+            band = f", {s['band_kn']} kn" if s.get("band_kn") else ""
+            lines.append(f"  - {s['date']}{where}{band}: focus next: " + "; ".join(s["focus_next_session"])
+                         + (f" | plan: {s['plan_adjustment']}" if s.get("plan_adjustment") else ""))
+    week = focus.get("week")
+    if week and week.get("focus_next_week"):
+        lines.append(f"- Weekly sailing summary (week of {week['week_start']}) focus: "
+                     + "; ".join(week["focus_next_week"])
+                     + (f" | plan: {week['plan_adjustment']}" if week.get("plan_adjustment") else ""))
+    return lines
+
+
 def _context_briefing(ctx: dict) -> str:
     """Render the full metrics context as plain-language facts for the
     DeepSeek system prompt."""
@@ -249,6 +269,7 @@ def _context_briefing(ctx: dict) -> str:
         lines.extend(f"  - {e['date']}: {e['text']}" for e in journal)
     else:
         lines.append("- No journal entries in the last 14 days.")
+    lines.extend(_sailing_focus_briefing(ctx.get("sailing_focus") or {}))
     if ctx.get("calendar"):
         lines.extend(_calendar_briefing(ctx["calendar"]))
     if ctx.get("wind_briefing"):
@@ -291,6 +312,10 @@ recovery the next day. If a planned training in the past has no session logged, 
 point it out. Races further out are listed too; for anything else beyond the four weeks \
 shown, call find_calendar_events. \
 The calendar is what the athlete intends; Garmin sessions are what actually happened.
+
+When you plan the athlete's week or an on-water session, build the sailing sessions around \
+the "sailing focus" points below (from the per-session iQFOIL analyses and the weekly \
+summary): turn them into concrete session goals, and match them to the wind forecast.
 
 You can also write to the calendar with add_calendar_event, update_calendar_event \
 and delete_calendar_event (entries are referenced by their [#id] -- internal, never \

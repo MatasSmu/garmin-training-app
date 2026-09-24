@@ -12,6 +12,9 @@ from pydantic import BaseModel, Field
 from app.analysis import service
 from app.analysis.settings import DEFAULTS, SPORTS
 from app.api.deps import get_db
+from app.sailing import reports as sail_reports
+from app.sailing.config import PARTS as SAIL_PARTS
+from app.sailing.config import SPORTS as SAIL_SPORTS
 
 router = APIRouter(prefix="/api/tracks", tags=["tracks"])
 
@@ -90,6 +93,9 @@ def options(conn: sqlite3.Connection = Depends(get_db)):
         "spots": service.spots(conn),
         "gear": service.list_gear(conn),
         "gear_kinds": list(service.GEAR_KINDS),
+        "setups": service.list_setups(conn),
+        "sail_parts": list(SAIL_PARTS),
+        "sail_sports": list(SAIL_SPORTS),
         "defaults": DEFAULTS,
     }
 
@@ -159,6 +165,9 @@ def patch_track(track_id: int, patch: TrackPatch, conn: sqlite3.Connection = Dep
         service.update_track(conn, track_id, body)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
+    if body.get("gear_ids"):
+        # first time the gear is filled in: analyse once in the background
+        sail_reports.maybe_auto_analyze(conn, track_id)
     return service.track_meta(conn, service.get_track_row(conn, track_id))
 
 

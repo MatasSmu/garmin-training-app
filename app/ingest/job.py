@@ -63,6 +63,7 @@ def _run() -> None:
     from app.analysis import service
     from app.ingest.garmin_client import GarminUnavailable, login_saved_tokens
     from app.ingest.sync import run_sync
+    from app.sailing import reports
 
     conn = get_connection()
     try:
@@ -79,11 +80,15 @@ def _run() -> None:
             _set(step=f"Analysing water session {i} of {n}…")
 
         res = service.import_garmin_water(conn, since.isoformat(), client=client, on_item=progress)
+        _set(step="Checking the weekly sailing summary…")
+        weekly = reports.ensure_last_week(conn)
         parts = [f"{new_acts} new activit{'y' if new_acts == 1 else 'ies'}" if new_acts else "No new activities"]
         if res["imported"]:
             parts.append(f"{res['imported']} new session{'s' if res['imported'] != 1 else ''} on the Session map")
         if res["failed"]:
             parts.append(f"{res['failed']} couldn't be analysed")
+        if weekly:
+            parts.append(f"weekly sailing summary for {weekly['week_start']} written")
         _set(ok=True, message=", ".join(parts) + ".")
     except GarminUnavailable as e:
         _set(ok=False, message=str(e))

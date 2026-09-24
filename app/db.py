@@ -40,6 +40,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     schema_path = Path(__file__).with_name("schema.sql")
     conn.executescript(schema_path.read_text())
     _migrate_coach_conversations(conn)
+    _migrate_gear(conn)
     conn.commit()
 
 
@@ -67,6 +68,29 @@ def _migrate_coach_conversations(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_coach_messages_conv ON coach_messages(conversation_id, id)"
     )
+
+
+def _migrate_gear(conn: sqlite3.Connection) -> None:
+    """Gear tables from before iQFOIL part codes get the code column and the
+    wider kind CHECK. SQLite can't alter a CHECK, so the table is rebuilt
+    with foreign keys off (renaming would repoint track_gear at the copy)."""
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'gear'").fetchone()[0]
+    if "front_wing" in sql:
+        return
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        schema = Path(__file__).with_name("schema.sql").read_text()
+        start = schema.index("CREATE TABLE IF NOT EXISTS gear (")
+        create = schema[start:schema.index(");", start) + 2].replace("gear (", "gear_new (", 1)
+        conn.execute(create)
+        cols = "id, kind, name, brand, size, notes, retired, created_at, updated_at"
+        conn.execute(f"INSERT INTO gear_new ({cols}) SELECT {cols} FROM gear")
+        conn.execute("DROP TABLE gear")
+        conn.execute("ALTER TABLE gear_new RENAME TO gear")
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def _now() -> str:

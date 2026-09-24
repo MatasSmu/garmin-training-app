@@ -21,11 +21,15 @@ from app.analysis.pipeline import analyze
 from app.analysis.settings import SPORTS, guess_sport, settings_hash
 from app.analysis.stats import polar_from_hist
 from app.config import PROJECT_ROOT
+from app.sailing import baselines as sail_baselines
+from app.sailing.config import PARTS as SAIL_PARTS
+from app.sailing.gear import part_identity
 
 log = logging.getLogger(__name__)
 
 TRACKS_DIR = PROJECT_ROOT / "data" / "tracks"
-GEAR_KINDS = ("board", "sail", "fin", "foil", "wing", "kite", "other")
+GEAR_KINDS = ("board", "front_wing", "back_wing", "foil_mast", "fuselage", "sail", "mast", "boom",
+              "fin", "foil", "wing", "kite", "other")
 
 
 def _now() -> str:
@@ -182,6 +186,7 @@ def refresh_conditions(conn, track_id: int, analyse: bool = True) -> dict | None
     conn.execute("UPDATE tracks SET conditions_json = ?, updated_at = ? WHERE id = ?",
                  (json.dumps(cond), _now(), track_id))
     conn.commit()
+    sail_baselines.rebuild(conn)  # wind speed decides the band
     if analyse:
         get_analysis(conn, track_id)
     return cond
@@ -250,6 +255,7 @@ def get_analysis(conn, track_id: int, *, force: bool = False, track=None) -> dic
          hashlib.sha1(hist.encode()).hexdigest()[:12], h, result["summary"]["end_utc"], track_id),
     )
     conn.commit()
+    sail_baselines.rebuild(conn)
     return result
 
 
@@ -305,10 +311,21 @@ def update_track(conn, track_id: int, patch: dict) -> None:
         params.append(_now())
         conn.execute(f"UPDATE tracks SET {', '.join(sets)} WHERE id = ?", [*params, track_id])
     if "gear_ids" in patch:
+        ids = sorted({int(g) for g in patch["gear_ids"] or []})
+        kinds = {r["id"]: r["kind"] for r in conn.execute(
+            f"SELECT id, kind FROM gear WHERE id IN ({','.join('?' for _ in ids)})", ids)} if ids else {}
+        if len(kinds) != len(ids):
+            conn.rollback()
+            raise ValueError("unknown gear id")
+        slots = [k for k in kinds.values() if k in SAIL_PARTS]
+        if len(slots) != len(set(slots)):
+            conn.rollback()
+            raise ValueError("only one part of each kind (board, front wing, sail, ...) per session")
         conn.execute("DELETE FROM track_gear WHERE track_id = ?", (track_id,))
-        for gid in patch["gear_ids"] or []:
-            conn.execute("INSERT OR IGNORE INTO track_gear (track_id, gear_id) VALUES (?, ?)", (track_id, int(gid)))
+        for gid in ids:
+            conn.execute("INSERT INTO track_gear (track_id, gear_id) VALUES (?, ?)", (track_id, gid))
     conn.commit()
+    sail_baselines.rebuild(conn)
 
 
 def delete_track(conn, track_id: int) -> bool:
@@ -317,6 +334,7 @@ def delete_track(conn, track_id: int) -> bool:
         return False
     conn.execute("DELETE FROM tracks WHERE id = ?", (track_id,))
     conn.commit()
+    sail_baselines.rebuild(conn)
     if not conn.execute("SELECT 1 FROM tracks WHERE file_path = ?", (t["file_path"],)).fetchone():
         (TRACKS_DIR / t["file_path"]).unlink(missing_ok=True)
     return True
@@ -395,8 +413,8 @@ LIST_KEYS = ("duration_s", "distance_m", "max_kn", "best_10s_kn", "best_500m_kn"
 def list_rows(conn, **filters) -> list[dict]:
     rows = filter_tracks(conn, **filters)
     gear = {}
-    for g in conn.execute("SELECT tg.track_id, g.id, g.kind, g.name FROM track_gear tg JOIN gear g ON g.id = tg.gear_id"):
-        gear.setdefault(g["track_id"], []).append({"id": g["id"], "kind": g["kind"], "name": g["name"]})
+    for g in conn.execute("SELECT tg.track_id, g.id, g.kind, g.code, g.name FROM track_gear tg JOIN gear g ON g.id = tg.gear_id"):
+        gear.setdefault(g["track_id"], []).append({"id": g["id"], "kind": g["kind"], "code": g["code"], "name": g["name"]})
     out = []
     for r in rows:
         s = _loads(r["summary_json"]) or {}
@@ -497,31 +515,108 @@ def list_gear(conn) -> list[dict]:
     return out
 
 
-GEAR_FIELDS = ("kind", "name", "brand", "size", "notes", "retired")
+GEAR_FIELDS = ("kind", "code", "name", "brand", "size", "notes", "retired")
+
+
+def _check_gear(conn, values: dict, gear_id: int | None) -> dict:
+    """A part needs a code or a name (the name defaults to the code). A code
+    may appear only once per kind, compared ignoring case and spaces."""
+    cur = dict(conn.execute("SELECT * FROM gear WHERE id = ?", (gear_id,)).fetchone()) if gear_id else {}
+    merged = {**cur, **values}
+    for k in ("code", "name", "brand", "size", "notes"):
+        if isinstance(values.get(k), str):
+            values[k] = values[k].strip() or None
+            merged[k] = values[k]
+    kind = merged.get("kind")
+    if kind not in GEAR_KINDS:
+        raise ValueError(f"kind must be one of {', '.join(GEAR_KINDS)}")
+    if not merged.get("name"):
+        if not merged.get("code"):
+            raise ValueError("a code (e.g. SC 392 899) or a name is required")
+        values["name"] = merged["code"]
+    ident = part_identity(merged.get("code"))
+    if ident:
+        for r in conn.execute("SELECT id, code FROM gear WHERE kind = ? AND code IS NOT NULL", (kind,)):
+            if r["id"] != gear_id and part_identity(r["code"]) == ident:
+                raise ValueError(f"{kind.replace('_', ' ')} {r['code']} is already in the inventory")
+    return values
 
 
 def upsert_gear(conn, values: dict, gear_id: int | None = None) -> int:
-    if values.get("kind") is not None and values["kind"] not in GEAR_KINDS:
-        raise ValueError(f"kind must be one of {', '.join(GEAR_KINDS)}")
+    values = _check_gear(conn, dict(values), gear_id)
     now = _now()
+    cols = [c for c in GEAR_FIELDS if c in values]
     if gear_id is None:
-        if not (values.get("name") or "").strip() or not values.get("kind"):
-            raise ValueError("kind and name are required")
-        cols = [c for c in GEAR_FIELDS if c in values]
         cur = conn.execute(
             f"INSERT INTO gear ({', '.join(cols)}, created_at, updated_at) VALUES ({', '.join('?' for _ in cols)}, ?, ?)",
             [*(values[c] for c in cols), now, now])
         conn.commit()
         return cur.lastrowid
-    cols = [c for c in GEAR_FIELDS if c in values]
     if cols:
         conn.execute(f"UPDATE gear SET {', '.join(f'{c} = ?' for c in cols)}, updated_at = ? WHERE id = ?",
                      [*(values[c] for c in cols), now, gear_id])
         conn.commit()
+        sail_baselines.rebuild(conn)  # a changed code or kind can move sessions between combos
     return gear_id
 
 
 def delete_gear(conn, gear_id: int) -> bool:
     cur = conn.execute("DELETE FROM gear WHERE id = ?", (gear_id,))
+    conn.commit()
+    sail_baselines.rebuild(conn)
+    return cur.rowcount > 0
+
+
+# ------------------------------------------------------------------ gear setups
+def list_setups(conn) -> list[dict]:
+    parts: dict[int, list[dict]] = {}
+    for r in conn.execute("SELECT sp.setup_id, g.id, g.kind, g.code, g.name, g.retired FROM gear_setup_parts sp "
+                          "JOIN gear g ON g.id = sp.gear_id ORDER BY g.kind"):
+        parts.setdefault(r["setup_id"], []).append(
+            {"id": r["id"], "kind": r["kind"], "code": r["code"], "name": r["name"], "retired": r["retired"]})
+    return [{**dict(s), "parts": parts.get(s["id"], [])}
+            for s in conn.execute("SELECT * FROM gear_setups ORDER BY name")]
+
+
+def save_setup(conn, values: dict, setup_id: int | None = None) -> int:
+    """Create or update a setup; gear_ids, when given, replaces its parts
+    (at most one part of each iQFOIL kind)."""
+    now = _now()
+    name = values.get("name")
+    if name is not None:
+        name = name.strip()
+    if setup_id is None and not name:
+        raise ValueError("a setup needs a name")
+    ids = None
+    if values.get("gear_ids") is not None:
+        ids = sorted({int(g) for g in values["gear_ids"]})
+        kinds = [r["kind"] for r in conn.execute(
+            f"SELECT kind FROM gear WHERE id IN ({','.join('?' for _ in ids)})", ids)] if ids else []
+        if len(kinds) != len(ids):
+            raise ValueError("unknown gear id")
+        slots = [k for k in kinds if k in SAIL_PARTS]
+        if len(slots) != len(set(slots)):
+            raise ValueError("only one part of each kind per setup")
+    if setup_id is None:
+        setup_id = conn.execute("INSERT INTO gear_setups (name, notes, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                                (name, values.get("notes"), now, now)).lastrowid
+    else:
+        sets, params = ["updated_at = ?"], [now]
+        if name:
+            sets.append("name = ?")
+            params.append(name)
+        if "notes" in values:
+            sets.append("notes = ?")
+            params.append(values["notes"])
+        conn.execute(f"UPDATE gear_setups SET {', '.join(sets)} WHERE id = ?", [*params, setup_id])
+    if ids is not None:
+        conn.execute("DELETE FROM gear_setup_parts WHERE setup_id = ?", (setup_id,))
+        conn.executemany("INSERT INTO gear_setup_parts (setup_id, gear_id) VALUES (?, ?)", [(setup_id, g) for g in ids])
+    conn.commit()
+    return setup_id
+
+
+def delete_setup(conn, setup_id: int) -> bool:
+    cur = conn.execute("DELETE FROM gear_setups WHERE id = ?", (setup_id,))
     conn.commit()
     return cur.rowcount > 0

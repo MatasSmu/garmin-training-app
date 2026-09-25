@@ -10,6 +10,7 @@ the weekly summary of a finished week, generated once by the Garmin sync.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import logging
@@ -20,7 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 from app import config
 from app.db import get_connection
 from app.sailing import baselines, deepseek, packet, prompts
-from app.sailing.config import MATCH_PARTS, MIN_COMBO_SESSIONS, ROLLING_N, WIND_BANDS
+from app.sailing.config import MATCH_PARTS, MIN_COMBO_SESSIONS, ROLLING_N, SPORTS, WIND_BANDS
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +142,43 @@ def session_state(conn: sqlite3.Connection, track_id: int) -> dict:
     view = packet.session_view(conn, track_id)
     return {**view, "analysis": stored_analysis(conn, track_id), "running": is_running(track_id),
             "ai_enabled": bool(config.DEEPSEEK_API_KEY)}
+
+
+def coach_session_view(conn: sqlite3.Connection, activity_id: int) -> dict | None:
+    """The GPS analysis of a Garmin activity for the coach chat: tacks and
+    gybes, VMG, angles, port vs starboard, the wind-band baseline comparison
+    and the stored session analysis. None if the activity has no analysed
+    track. Reads the cached engine result as is -- never re-runs anything."""
+    t = conn.execute("SELECT * FROM tracks WHERE activity_id = ? AND summary_json IS NOT NULL "
+                     "ORDER BY start_utc LIMIT 1", (activity_id,)).fetchone()
+    if t is None:
+        return None
+    summary = json.loads(t["summary_json"])
+    cond = _json(t["conditions_json"])
+    cached = conn.execute("SELECT result_gz FROM track_analysis WHERE track_id = ?", (t["id"],)).fetchone()
+    pos = json.loads(gzip.decompress(cached["result_gz"])).get("point_of_sail") if cached else None
+    stats = packet.session_stats(summary)
+    stats.update(packet.drop_none({"tack_min_kn": packet.rnd(summary.get("tack_min_kn")),
+                                   "gybe_min_kn": packet.rnd(summary.get("gybe_min_kn"))}))
+    out = {"track_id": t["id"], "sport": t["sport"], "stats": stats,
+           "wind": packet.wind_info(summary, cond), "gear": packet.gear_info(conn, t["id"]),
+           "port_vs_starboard": packet.port_starboard(pos)}
+    view = packet.session_view(conn, t["id"])
+    if view["eligible"]:
+        base = view["baseline"]
+        out["vs_baseline"] = packet.drop_none({
+            "level": base["level"], "fallback_reason": base["fallback_reason"], "earlier_sessions": base["sessions"],
+            "rolling_avg": packet.drop_none(base["rolling_avg"]), "best": packet.drop_none(base["best"]),
+            "pct_vs_rolling_avg": packet.drop_none({m: c["pct_vs_avg"] for m, c in view["comparison"].items()}),
+            "new_personal_bests": [m for m, c in view["comparison"].items() if c["new_best"]],
+        })
+    elif t["sport"] in SPORTS:
+        out["vs_baseline"] = {"unavailable": view["reason"]}
+    stored = stored_analysis(conn, t["id"])
+    if stored:
+        out["coach_analysis"] = {**{k: v for k, v in stored["result"].items() if k != "vs_baseline"},
+                                 "written": stored["created_at"][:10], "out_of_date": stored["stale"]}
+    return packet.drop_none(out)
 
 
 # ------------------------------------------------------------------ weekly summaries

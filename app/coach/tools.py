@@ -14,6 +14,7 @@ import sqlite3
 from pydantic import ValidationError
 
 from app.calendar_schema import CalendarEvent
+from app.sailing.reports import coach_session_view
 from app.db import (
     CALENDAR_FIELDS,
     delete_calendar_event,
@@ -112,8 +113,12 @@ TOOL_SPECS = [
             "description": (
                 "Full detail for one session by activity_id: HR and HR zones, speed, training "
                 "effect and load, temperature, strength sets, the journal notes for that day and "
-                "that night's sleep/HRV/body battery. Call it only when the athlete wants a "
-                "specific session analysed."
+                "that night's sleep/HRV/body battery. Water sessions with a GPS analysis also get "
+                "gps_analysis: tacks and gybes (count, % completed on the foil, metres lost, min "
+                "speed), upwind/downwind VMG, angles and speeds, % foiling, top speeds, port vs "
+                "starboard, gear, wind band, % vs the athlete's baseline in that wind band and "
+                "the stored coach analysis. Speeds in knots; for angle_up_deg lower is better. "
+                "Call it only when the athlete wants a specific session analysed."
             ),
             "parameters": {
                 "type": "object",
@@ -272,6 +277,9 @@ def get_session_details(conn: sqlite3.Connection, activity_id: int) -> dict:
         detail["that_day_metrics"] = {
             k: v for k, v in dict(metrics[0]).items() if v is not None and k != "updated_at"
         }
+    gps = coach_session_view(conn, row["activity_id"])
+    if gps:
+        detail["gps_analysis"] = gps
     return detail
 
 

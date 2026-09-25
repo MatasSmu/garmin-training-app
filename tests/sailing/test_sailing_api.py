@@ -16,7 +16,8 @@ from app import config
 from app.analysis import conditions, service
 from app.api.deps import get_db
 from app.coach.responder import _sailing_focus_briefing
-from app.db import init_db
+from app.coach.tools import get_session_details
+from app.db import init_db, upsert_session
 from app.main import app
 from app.sailing import deepseek, prompts, reports
 
@@ -244,6 +245,39 @@ def test_analysis_flow(env):
     assert focus["week"]["focus_next_week"] == ["gybe drills"]
     lines = "\n".join(_sailing_focus_briefing(focus))
     assert "10 foiling gybes each way" in lines and "gybe drills" in lines
+
+
+def test_coach_chat_session_details_include_gps_analysis(env):
+    client, conn, fake, monkeypatch = env
+    tid = _upload(client, "2026-09-22_puck_windfoil.fit")
+    upsert_session(conn, {"activity_id": 999, "activity_type": "windsurfing_v2", "activity_name": "Puck Windfoiling",
+                          "start_time_local": "2026-09-22 14:00:00", "start_date": "2026-09-22", "duration_s": 6800,
+                          "raw_json": "{}", "updated_at": "x"})
+    conn.execute("UPDATE tracks SET activity_id = 999 WHERE id = ?", (tid,))
+    conn.commit()
+
+    gps = get_session_details(conn, 999)["gps_analysis"]
+    s = gps["stats"]
+    assert s["tacks"] > 0 and "tack_foiling_pct" in s and "tack_loss_m" in s and "tack_min_kn" in s
+    assert s["vmg_up_kn"] > 0 and s["vmg_down_kn"] > 0 and "angle_up_deg" in s
+    assert "upwind" in gps["port_vs_starboard"]
+    assert gps["wind"]["band_kn"] == "12-16"
+    assert gps["vs_baseline"]["earlier_sessions"] == 0
+    assert "coach_analysis" not in gps
+
+    _enable_llm(monkeypatch, fake)
+    assert client.post(f"/api/sailing/sessions/{tid}/analyze").status_code == 200
+    n = len(fake.calls)
+    gps = get_session_details(conn, 999)["gps_analysis"]
+    assert gps["coach_analysis"]["focus_next_session"] == ["10 foiling gybes each way"]
+    assert gps["coach_analysis"]["out_of_date"] is False
+    assert len(fake.calls) == n  # reading details never calls the model
+    assert len(json.dumps(gps)) < 6000  # stays a small tool result
+
+    # a Garmin activity without a GPS track is unchanged
+    upsert_session(conn, {"activity_id": 1000, "activity_type": "cycling", "start_time_local": "2026-09-22 08:00:00",
+                          "start_date": "2026-09-22", "raw_json": "{}", "updated_at": "x"})
+    assert "gps_analysis" not in get_session_details(conn, 1000)
 
 
 def test_weekly_auto_runs_once_per_finished_week(env):

@@ -23,7 +23,7 @@ def estimate_tokens(obj) -> int:
     return math.ceil(len(json.dumps(obj, separators=(",", ":"), ensure_ascii=False)) / 3)
 
 
-def _r(v, nd=1):
+def rnd(v, nd=1):
     if v is None:
         return None
     return int(round(float(v))) if nd == 0 else round(float(v), nd)
@@ -35,21 +35,21 @@ def drop_none(d: dict) -> dict:
 
 def session_stats(s: dict) -> dict:
     return drop_none({
-        "duration_min": _r((s.get("duration_s") or 0) / 60, 0),
-        "moving_min": _r((s.get("moving_s") or 0) / 60, 0),
-        "distance_km": _r((s.get("distance_m") or 0) / 1000, 1),
-        "foiling_pct": _r(s.get("state_pct"), 0),
+        "duration_min": rnd((s.get("duration_s") or 0) / 60, 0),
+        "moving_min": rnd((s.get("moving_s") or 0) / 60, 0),
+        "distance_km": rnd((s.get("distance_m") or 0) / 1000, 1),
+        "foiling_pct": rnd(s.get("state_pct"), 0),
         "flights": s.get("flights"), "touchdowns": s.get("touchdowns"),
-        "max_kn": _r(s.get("max_kn")), "best_10s_kn": _r(s.get("best_10s_kn")),
-        "best_500m_kn": _r(s.get("best_500m_kn")), "avg_moving_kn": _r(s.get("avg_moving_kn")),
-        "vmg_up_kn": _r(s.get("upwind_vmg_kn"), 2), "vmg_down_kn": _r(s.get("downwind_vmg_kn"), 2),
-        "angle_up_deg": _r(s.get("upwind_twa"), 0), "angle_down_deg": _r(s.get("downwind_twa"), 0),
-        "speed_up_kn": _r(s.get("upwind_kn")), "speed_down_kn": _r(s.get("downwind_kn")),
-        "tacks": s.get("tacks"), "tack_foiling_pct": _r(s.get("tack_success_pct"), 0),
-        "tack_loss_m": _r(s.get("tack_loss_m"), 0),
-        "gybes": s.get("gybes"), "gybe_foiling_pct": _r(s.get("gybe_success_pct"), 0),
-        "gybe_loss_m": _r(s.get("gybe_loss_m"), 0),
-        "hr_avg": _r(s.get("hr_avg"), 0), "hr_max": _r(s.get("hr_max"), 0),
+        "max_kn": rnd(s.get("max_kn")), "best_10s_kn": rnd(s.get("best_10s_kn")),
+        "best_500m_kn": rnd(s.get("best_500m_kn")), "avg_moving_kn": rnd(s.get("avg_moving_kn")),
+        "vmg_up_kn": rnd(s.get("upwind_vmg_kn"), 2), "vmg_down_kn": rnd(s.get("downwind_vmg_kn"), 2),
+        "angle_up_deg": rnd(s.get("upwind_twa"), 0), "angle_down_deg": rnd(s.get("downwind_twa"), 0),
+        "speed_up_kn": rnd(s.get("upwind_kn")), "speed_down_kn": rnd(s.get("downwind_kn")),
+        "tacks": s.get("tacks"), "tack_foiling_pct": rnd(s.get("tack_success_pct"), 0),
+        "tack_loss_m": rnd(s.get("tack_loss_m"), 0),
+        "gybes": s.get("gybes"), "gybe_foiling_pct": rnd(s.get("gybe_success_pct"), 0),
+        "gybe_loss_m": rnd(s.get("gybe_loss_m"), 0),
+        "hr_avg": rnd(s.get("hr_avg"), 0), "hr_max": rnd(s.get("hr_max"), 0),
     })
 
 
@@ -66,11 +66,11 @@ def port_starboard(pos: dict | None) -> dict | None:
             continue
 
         def side(b):
-            return drop_none({"vmg_kn": _r(sign * b["avg_vmg_kn"], 2) if b.get("avg_vmg_kn") is not None else None,
-                               "angle_deg": _r(b.get("avg_twa"), 0), "speed_kn": _r(b.get("avg_kn")),
-                               "foiling_pct": _r(b.get("state_pct"), 0), "min": _r(b["time_s"] / 60, 0)})
+            return drop_none({"vmg_kn": rnd(sign * b["avg_vmg_kn"], 2) if b.get("avg_vmg_kn") is not None else None,
+                               "angle_deg": rnd(b.get("avg_twa"), 0), "speed_kn": rnd(b.get("avg_kn")),
+                               "foiling_pct": rnd(b.get("state_pct"), 0), "min": rnd(b["time_s"] / 60, 0)})
         ps, ss = side(p), side(s)
-        diff = drop_none({k: _r(ps[k] - ss[k], 2) for k in ("vmg_kn", "angle_deg", "speed_kn") if k in ps and k in ss})
+        diff = drop_none({k: rnd(ps[k] - ss[k], 2) for k in ("vmg_kn", "angle_deg", "speed_kn") if k in ps and k in ss})
         out[leg] = {"port": ps, "starboard": ss, "port_minus_starboard": diff}
     return out or None
 
@@ -83,11 +83,11 @@ def recovery(conn: sqlite3.Connection, day: str) -> dict | None:
     today = rows.get(day)
     week = [r["hrv_last_night_avg"] for r in rows.values() if r["hrv_last_night_avg"] is not None]
     out = drop_none({
-        "hrv": _r(today["hrv_last_night_avg"], 0) if today else None,
-        "hrv_7d_avg": _r(sum(week) / len(week), 1) if week else None,
+        "hrv": rnd(today["hrv_last_night_avg"], 0) if today else None,
+        "hrv_7d_avg": rnd(sum(week) / len(week), 1) if week else None,
         "hrv_status": today["hrv_status"] if today else None,
         "sleep_score": today["sleep_score"] if today else None,
-        "sleep_h": _r(today["sleep_duration_s"] / 3600, 1) if today and today["sleep_duration_s"] else None,
+        "sleep_h": rnd(today["sleep_duration_s"] / 3600, 1) if today and today["sleep_duration_s"] else None,
         "body_battery_max": today["body_battery_max"] if today else None,
     })
     return out or None
@@ -98,6 +98,22 @@ def track_gear_map(conn: sqlite3.Connection, track_id: int) -> dict[str, str]:
     return {r["kind"]: r["code"] or r["name"] for r in conn.execute(
         "SELECT g.kind, g.code, g.name FROM track_gear tg JOIN gear g ON g.id = tg.gear_id WHERE tg.track_id = ?",
         (track_id,)) if r["kind"] in PARTS}
+
+
+def gear_info(conn: sqlite3.Connection, track_id: int) -> dict | None:
+    return {k: " ".join(v.split()) for k, v in track_gear_map(conn, track_id).items()} or None
+
+
+def wind_info(summary: dict, cond: dict | None) -> dict | None:
+    """Average wind and band from the conditions; direction from the
+    engine's inference when it has one."""
+    cond = cond or {}
+    return drop_none({
+        "avg_kn": rnd(cond.get("wind_kn")), "gust_kn": rnd(cond.get("gust_kn")),
+        "from_deg": rnd(summary.get("wind_deg") if summary.get("wind_deg") is not None else cond.get("wind_dir"), 0),
+        "band_kn": baselines.wind_band(cond.get("wind_kn")),
+        "source": None if not cond else "manual" if cond.get("source") == "manual" else "forecast model",
+    }) or None
 
 
 def eligibility(t: sqlite3.Row, point: dict | None) -> str | None:
@@ -146,13 +162,8 @@ def build(conn: sqlite3.Connection, track_id: int, *, point_of_sail: dict | None
         "date": t["start_date"],
         "spot": t["spot"],
         "session": session_stats(summary),
-        "wind": drop_none({
-            "avg_kn": _r(cond.get("wind_kn")), "gust_kn": _r(cond.get("gust_kn")),
-            "from_deg": _r(summary.get("wind_deg") if summary.get("wind_deg") is not None else cond.get("wind_dir"), 0),
-            "band_kn": view["band"],
-            "source": "manual" if cond.get("source") == "manual" else "forecast model",
-        }),
-        "gear": {k: " ".join(v.split()) for k, v in track_gear_map(conn, track_id).items()} or None,
+        "wind": wind_info(summary, cond),
+        "gear": gear_info(conn, track_id),
         "note": note or None,
         "baseline": drop_none({
             "level": base["level"], "gear_matched_on": base["gear_label"] if base["level"] == "band+gear" else None,

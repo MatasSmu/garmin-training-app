@@ -16,7 +16,7 @@ from app import config
 from app.analysis import conditions, service
 from app.api.deps import get_db
 from app.coach.responder import _sailing_focus_briefing
-from app.coach.tools import get_session_details
+from app.coach.tools import get_session_details, run_tool
 from app.db import init_db, upsert_session
 from app.main import app
 from app.sailing import deepseek, prompts, reports
@@ -273,6 +273,21 @@ def test_coach_chat_session_details_include_gps_analysis(env):
     assert gps["coach_analysis"]["out_of_date"] is False
     assert len(fake.calls) == n  # reading details never calls the model
     assert len(json.dumps(gps)) < 6000  # stays a small tool result
+
+    # every tack, gybe and leg on request
+    full = json.loads(run_tool(conn, "get_session_track_detail", json.dumps({"activity_id": 999})))
+    res = service.get_analysis(conn, tid)
+    man, legs = full["maneuvers"], full["legs"]
+    assert len(man["rows"]) == len(res["maneuvers"]) > 0 and len(legs["rows"]) == len(res["legs"]) > 0
+    row = dict(zip(man["columns"], man["rows"][0]))
+    m0 = res["maneuvers"][0]
+    assert row["type"] == m0["type"] and row["entry_kn"] == round(m0["entry_kn"], 1)
+    assert row["stayed_on_foil"] == m0["success"] and len(row["at"]) == 8  # local HH:MM:SS
+    assert {"vmg_kn", "twa", "pct_target_vmg", "gain_m"} <= set(legs["columns"])
+    assert full["flights"]["summary"]["count"] == res["state"]["flights"]
+    assert "2 s" in full["best_splits"] and full["point_of_sail"]["rows"]
+    assert get_session_details(conn, 999)["more"].startswith("get_session_track_detail")
+    assert "error" in json.loads(run_tool(conn, "get_session_track_detail", json.dumps({"activity_id": 12345})))
 
     # a Garmin activity without a GPS track is unchanged
     upsert_session(conn, {"activity_id": 1000, "activity_type": "cycling", "start_time_local": "2026-09-22 08:00:00",

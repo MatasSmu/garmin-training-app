@@ -300,7 +300,11 @@ The data below is only a summary. When the athlete asks about a specific session
 find_sessions to locate it and get_session_details to read it before answering. \
 Don't call the tools for general questions the summary already answers. If an \
 earlier reply in this conversation said session-level data isn't available, that \
-was before you had these tools -- look the session up instead of repeating it.
+was before you had these tools -- look the session up instead of repeating it. \
+For windfoil/windsurf sessions, get_session_details includes a GPS analysis (tacks, \
+VMG, port vs starboard, baseline); when the athlete asks about individual tacks or \
+gybes, legs, specific moments or consistency, also call get_session_track_detail and \
+quote the specific maneuvers or legs (by local time) that support your point.
 
 The athlete keeps a calendar of planned trainings, races, plans and days they \
 CAN'T train (exams, meeting friends, parties, other). Treat it as hard constraints \

@@ -144,19 +144,123 @@ def session_state(conn: sqlite3.Connection, track_id: int) -> dict:
             "ai_enabled": bool(config.DEEPSEEK_API_KEY)}
 
 
+def _track_of_activity(conn: sqlite3.Connection, activity_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM tracks WHERE activity_id = ? AND summary_json IS NOT NULL "
+                        "ORDER BY start_utc LIMIT 1", (activity_id,)).fetchone()
+
+
+def _cached_result(conn: sqlite3.Connection, track_id: int) -> dict | None:
+    """The stored engine result as is (even if settings changed since) --
+    reading it never re-runs the engine."""
+    r = conn.execute("SELECT result_gz FROM track_analysis WHERE track_id = ?", (track_id,)).fetchone()
+    return json.loads(gzip.decompress(r["result_gz"])) if r else None
+
+
+def _table(columns: list[str], rows: list[list]) -> dict:
+    """Column names once, then one short array per row -- about a third of
+    the tokens of a list of dicts."""
+    return {"columns": columns, "rows": rows}
+
+
+def track_detail(conn: sqlite3.Connection, activity_id: int) -> dict | None:
+    """Everything the GPS analysis found in one session, for the coach chat:
+    every tack and gybe, every leg, every flight, race legs, best splits,
+    point of sail by tack, targets, polar bests, wind and HR. Times are the
+    athlete's local clock. None if the activity has no analysed track."""
+    t = _track_of_activity(conn, activity_id)
+    r = _cached_result(conn, t["id"]) if t else None
+    if r is None:
+        return None
+    off = t["utc_offset_s"] or 0
+    rnd = packet.rnd
+
+    def at(epoch):
+        return None if epoch is None else datetime.fromtimestamp(epoch + off, timezone.utc).strftime("%H:%M:%S")
+
+    maneuvers = _table(
+        ["n", "at", "type", "sailing", "from_tack", "duration_s", "entry_kn", "min_kn", "exit_kn", "entry_twa",
+         "exit_twa", "turn_deg", "lost_m", "stayed_on_foil", "recovery_s", "hr_max"],
+        [[m.get("id"), at(m.get("tc")), m["type"], m.get("direction"), m.get("from_side"), rnd(m.get("duration_s"), 0),
+          rnd(m.get("entry_kn")), rnd(m.get("min_kn")), rnd(m.get("exit_kn")), rnd(m.get("entry_twa"), 0),
+          rnd(m.get("exit_twa"), 0), rnd(m.get("turn_deg"), 0), rnd(m.get("distance_lost_m"), 0),
+          m.get("success"), rnd(m.get("recovery_s"), 0), rnd(m.get("hr_max"), 0)] for m in r["maneuvers"]])
+    legs = _table(
+        ["n", "start", "type", "tack", "duration_s", "distance_m", "avg_kn", "max_kn", "twa", "vmg_kn", "gain_m",
+         "foiling_pct", "pct_target_speed", "pct_target_vmg", "gain_vs_target_m", "deg_off_best_vmg_angle", "hr_avg"],
+        [[l.get("id"), at(l.get("t0")), l["type"], l.get("side"), rnd(l.get("duration_s"), 0), rnd(l.get("distance_m"), 0),
+          rnd(l.get("avg_kn")), rnd(l.get("max_kn")), rnd(l.get("avg_twa"), 0), rnd(l.get("avg_vmg_kn"), 2),
+          rnd(l.get("gain_m"), 0), rnd(l.get("state_pct"), 0), rnd(l.get("pct_target_speed"), 0),
+          rnd(l.get("pct_target_vmg"), 0), rnd(l.get("gain_vs_target_m"), 0), rnd(l.get("angle_vs_ref"), 0),
+          rnd(l.get("hr_avg"), 0)] for l in r["legs"]])
+    st = r.get("state") or {}
+    flights = {
+        "summary": packet.drop_none({"count": st.get("flights"), "touchdowns": st.get("touchdowns"),
+                                     "pct_of_moving": rnd(st.get("pct_of_moving"), 0), "longest_s": rnd(st.get("longest_s"), 0),
+                                     "longest_m": rnd(st.get("longest_m"), 0), "avg_s": rnd(st.get("avg_flight_s"), 0),
+                                     "on_kn": st.get("on_kn"), "off_kn": st.get("off_kn")}),
+        **_table(["start", "duration_s", "distance_m", "max_kn"],
+                 [[at(f.get("t0")), rnd(f.get("duration_s"), 0), rnd(f.get("distance_m"), 0), rnd(f.get("max_kn"))]
+                  for f in r.get("flights") or []]),
+    }
+    pos = r.get("point_of_sail") or {}
+    point_of_sail = _table(
+        ["leg_type", "tack", "minutes", "avg_kn", "max_kn", "vmg_kn", "twa", "foiling_pct"],
+        [[k, side, rnd((b.get("time_s") or 0) / 60, 1), rnd(b.get("avg_kn")), rnd(b.get("max_kn")),
+          rnd(b.get("avg_vmg_kn"), 2), rnd(b.get("avg_twa"), 0), rnd(b.get("state_pct"), 0)]
+         for k in ("upwind", "reach", "downwind", "all") for side in ("port", "starboard", "all")
+         if (b := (pos.get(k) or {}).get(side)) and b.get("time_s")])
+    race = r.get("race") or {}
+    race_legs = _table(
+        ["from", "to", "type", "duration_s", "avg_kn", "vmg_up_kn", "vmg_down_kn", "gain_m", "tacks", "gybes", "foiling_pct"],
+        [[g.get("from"), g.get("to"), g.get("type"), rnd(g.get("duration_s"), 0), rnd(g.get("avg_kn")),
+          rnd(g.get("avg_vmg_up_kn"), 2), rnd(g.get("avg_vmg_down_kn"), 2), rnd(g.get("gain_m"), 0),
+          g.get("tacks"), g.get("gybes"), rnd(g.get("state_pct"), 0)] for g in race.get("legs") or []])
+    hr = r.get("hr") or {}
+    w = r.get("wind") or {}
+
+    def best(p):
+        return {k: packet.drop_none({kk: rnd(v, 2 if kk == "vmg_kn" else 1) for kk, v in (p.get(k) or {}).items()})
+                for k in ("best_upwind", "best_downwind")} if p else None
+
+    return packet.drop_none({
+        "track_id": t["id"], "sport": t["sport"],
+        "notes": "Times are local. TWA in degrees off the wind; VMG positive = towards the wind on upwind legs. "
+                 "sailing = what the athlete was doing when turning (rounding = turning from upwind to downwind or back, "
+                 "no loss figure). lost_m = metres lost to windward vs sailing straight on. stayed_on_foil = no touchdown.",
+        "maneuvers": maneuvers,
+        "legs": legs,
+        "flights": flights,
+        "best_splits": {s["label"]: [rnd(s.get("kn")), at(s.get("t0"))] for s in r.get("splits") or [] if s.get("kn")},
+        "point_of_sail": point_of_sail,
+        "targets": packet.drop_none({k: rnd(v, 1) if isinstance(v, float) else v for k, v in (r.get("targets") or {}).items()}),
+        "session_polar_best": best(r.get("polar")),
+        "personal_polar_best": best(r.get("personal_polar")),
+        "wind": packet.drop_none({"from_deg": rnd(w.get("deg"), 0), "confidence": w.get("confidence"),
+                                  "source": w.get("source")}),
+        "race": packet.drop_none({"start": at(race.get("start")), "marks": race.get("marks_mode"),
+                                  "legs": race_legs if race_legs["rows"] else None}),
+        "heart_rate": packet.drop_none({
+            "avg": hr.get("avg"), "max": hr.get("max"), "sailing_avg": hr.get("sailing_avg"),
+            "maneuver_avg": hr.get("maneuver_avg"), "tack_peak_avg": hr.get("tack_peak_avg"),
+            "gybe_peak_avg": hr.get("gybe_peak_avg"),
+            "zone_minutes": {f"z{z['zone']}": rnd(z["time_s"] / 60, 1) for z in hr.get("zones") or []} or None,
+            "by_speed_kn": {str(b["kn"]): rnd(b["hr"], 0) for b in hr.get("by_speed") or []} or None,
+        }) or None,
+        "warnings": r.get("warnings") or None,
+    })
+
+
 def coach_session_view(conn: sqlite3.Connection, activity_id: int) -> dict | None:
     """The GPS analysis of a Garmin activity for the coach chat: tacks and
     gybes, VMG, angles, port vs starboard, the wind-band baseline comparison
     and the stored session analysis. None if the activity has no analysed
     track. Reads the cached engine result as is -- never re-runs anything."""
-    t = conn.execute("SELECT * FROM tracks WHERE activity_id = ? AND summary_json IS NOT NULL "
-                     "ORDER BY start_utc LIMIT 1", (activity_id,)).fetchone()
+    t = _track_of_activity(conn, activity_id)
     if t is None:
         return None
     summary = json.loads(t["summary_json"])
     cond = _json(t["conditions_json"])
-    cached = conn.execute("SELECT result_gz FROM track_analysis WHERE track_id = ?", (t["id"],)).fetchone()
-    pos = json.loads(gzip.decompress(cached["result_gz"])).get("point_of_sail") if cached else None
+    pos = (_cached_result(conn, t["id"]) or {}).get("point_of_sail")
     stats = packet.session_stats(summary)
     stats.update(packet.drop_none({"tack_min_kn": packet.rnd(summary.get("tack_min_kn")),
                                    "gybe_min_kn": packet.rnd(summary.get("gybe_min_kn"))}))

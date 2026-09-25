@@ -14,7 +14,7 @@ import sqlite3
 from pydantic import ValidationError
 
 from app.calendar_schema import CalendarEvent
-from app.sailing.reports import coach_session_view
+from app.sailing.reports import coach_session_view, track_detail
 from app.db import (
     CALENDAR_FIELDS,
     delete_calendar_event,
@@ -119,6 +119,28 @@ TOOL_SPECS = [
                 "starboard, gear, wind band, % vs the athlete's baseline in that wind band and "
                 "the stored coach analysis. Speeds in knots; for angle_up_deg lower is better. "
                 "Call it only when the athlete wants a specific session analysed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"activity_id": {"type": "integer"}},
+                "required": ["activity_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_session_track_detail",
+            "description": (
+                "Everything the GPS analysis found in one water session (only for sessions whose "
+                "get_session_details has gps_analysis): EVERY tack and gybe (local time, entry/min/"
+                "exit speed, angles in and out, metres lost, stayed on foil, recovery, peak HR), "
+                "EVERY leg (type, tack, duration, speed, TWA, VMG, metres gained, % foiling, % of "
+                "target speed/VMG, degrees off the best-VMG angle), every flight, race legs between "
+                "marks, best splits, point of sail by tack, targets, session and personal polar "
+                "best-VMG angles, wind, and HR (zones, by speed, in maneuvers). Tables are "
+                "{columns, rows}. Call it when the athlete asks about individual tacks or gybes, "
+                "legs, specific moments, consistency or patterns within a session."
             ),
             "parameters": {
                 "type": "object",
@@ -280,6 +302,14 @@ def get_session_details(conn: sqlite3.Connection, activity_id: int) -> dict:
     gps = coach_session_view(conn, row["activity_id"])
     if gps:
         detail["gps_analysis"] = gps
+        detail["more"] = "get_session_track_detail has every tack, gybe, leg and flight of this session"
+    return detail
+
+
+def get_session_track_detail(conn: sqlite3.Connection, activity_id: int) -> dict:
+    detail = track_detail(conn, int(activity_id))
+    if detail is None:
+        return {"error": f"no GPS analysis for activity_id {activity_id} -- it has to be on the Session map"}
     return detail
 
 
@@ -338,6 +368,7 @@ def delete_calendar_event_tool(conn: sqlite3.Connection, changes: list, id: int)
 _EXECUTORS = {
     "find_sessions": find_sessions,
     "get_session_details": get_session_details,
+    "get_session_track_detail": get_session_track_detail,
     "find_calendar_events": find_calendar_events,
 }
 

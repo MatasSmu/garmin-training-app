@@ -383,7 +383,8 @@
     renderReadout(i);
     if (D.windCtl) {
       var w = S.wind[i];
-      D.windCtl.querySelector("svg").style.transform = "rotate(" + (w + 180) + "deg)";
+      // the arrow points down (blowing from the north) at 0 deg: rotate by where the wind comes from
+      D.windCtl.querySelector("svg").style.transform = "rotate(" + w + "deg)";
       D.windCtl.querySelector("span").textContent = "Wind " + TK.deg(w);
     }
     if (!fromChart) redrawCharts();

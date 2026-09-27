@@ -193,12 +193,20 @@
     var sc = el("div", { class: "tk-scrub" });
     D.playBtn = el("button", { class: "tk-btn primary", type: "button", text: "▶ Play", "aria-label": "Play replay", onclick: togglePlay });
     D.speedSel = el("select", { "aria-label": "Replay speed", class: "tk-btn" });
-    [1, 5, 10, 30, 60, 120].forEach(function (v) { D.speedSel.appendChild(el("option", { value: v, text: v + "×", selected: v === 30 })); });
+    [1, 2, 3, 4, 5, 10, 30, 60, 120].forEach(function (v) { D.speedSel.appendChild(el("option", { value: v, text: v + "×", selected: v === 30 })); });
+    D.trailSel = el("select", { "aria-label": "Trail length", class: "tk-btn" });
+    [1, 2, 3, 4].forEach(function (v) { D.trailSel.appendChild(el("option", { value: v, text: v + " min trail", selected: v === trailMin })); });
+    D.trailSel.addEventListener("change", function () {
+      trailMin = +D.trailSel.value;
+      D.trailKey = null;
+      updateTrail(D.idx);
+    });
     D.slider = el("input", { type: "range", min: 0, max: D.n - 1, value: 0, step: 1, "aria-label": "Replay position" });
     D.slider.addEventListener("input", function () { setScrub(+D.slider.value); });
     D.clockEl = el("span", { class: "clock" });
     sc.appendChild(D.playBtn);
     sc.appendChild(D.speedSel);
+    sc.appendChild(D.trailSel);
     sc.appendChild(D.slider);
     sc.appendChild(D.clockEl);
     panel.appendChild(sc);
@@ -304,7 +312,7 @@
   }
 
   var BASE_OPACITY = 0.25; // the whole route, faintly
-  var TRAIL_S = 60;        // seconds of track lit up behind the boat during replay
+  var trailMin = 1;        // minutes of track lit up behind the boat during replay (kept across sessions)
   var LINE = { interactive: false, lineCap: "round", lineJoin: "round" };
 
   function drawTrack() {
@@ -353,10 +361,10 @@
     return { byCls: byCls, all: all };
   }
 
-  // Light up the last TRAIL_S seconds up to point i; anything older falls back to the dim base track.
+  // Light up the last trailMin minutes up to point i; anything older falls back to the dim base track.
   function updateTrail(i) {
     if (!D.trailLines) return;
-    var t = D.X[i] - TRAIL_S, lo = 0, hi = i;
+    var t = D.X[i] - trailMin * 60, lo = 0, hi = i;
     while (lo < hi) { var mid = (lo + hi) >> 1; if (D.X[mid] < t) lo = mid + 1; else hi = mid; }
     var key = lo + ":" + i;
     if (key === D.trailKey) return;

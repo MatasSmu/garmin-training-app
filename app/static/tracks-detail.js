@@ -204,8 +204,23 @@
     panel.appendChild(sc);
     D.readout = el("div", { class: "tk-readout", "aria-live": "off" });
     panel.appendChild(D.readout);
+    D.readoutVals = [];
+    ["heading", "of target", D.stateName.toLowerCase(), "m upwind"].forEach(function (label) {
+      var b = el("b"), s = el("span", { text: label });
+      D.readoutVals.push([b, s]);
+      D.readout.appendChild(el("div", null, [b, s]));
+    });
 
     var map = (D.map = L.map(mapDiv, { preferCanvas: true, zoomSnap: 0.25 }));
+    // The full track sits in its own pane, dimmed as a whole so overlapping segments don't darken.
+    // The replay trail gets a second canvas above it, so playback repaints only the trail and not the full track.
+    map.createPane("tkBase").style.zIndex = 390;
+    map.getPane("tkBase").style.opacity = BASE_OPACITY;
+    map.createPane("tkTrail").style.zIndex = 450;
+    map.getPane("tkTrail").style.pointerEvents = "none";
+    D.baseRenderer = L.canvas({ pane: "tkBase" });
+    D.trailRenderer = L.canvas({ pane: "tkTrail" });
+    D.ll = S.lat.map(function (la, i) { return L.latLng(la, S.lon[i]); });
     var dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light";
     var base = TK.grayTiles(dark);
     var osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" });
@@ -216,6 +231,7 @@
     L.control.scale({ imperial: false }).addTo(map);
 
     D.trackLayer = L.layerGroup().addTo(map);
+    D.trailLayer = L.layerGroup().addTo(map);
     D.hlLayer = L.layerGroup().addTo(map);
     D.manLayer = L.layerGroup().addTo(map);
     D.raceLayer = L.layerGroup().addTo(map);
@@ -231,21 +247,13 @@
       keyboard: false, interactive: false, zIndexOffset: 1000,
     }).addTo(map);
 
-    var WindCtl = L.Control.extend({
-      onAdd: function () {
-        var d = L.DomUtil.create("div", "tk-wind-ctl");
-        d.innerHTML = '<svg viewBox="-15 -15 30 30" aria-hidden="true"><path d="M0,-12 L0,10 M-5,4 L0,11 L5,4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
-        D.windCtl = d;
-        return d;
-      },
-    });
-    new WindCtl({ position: "topright" }).addTo(map);
+    hudControl().addTo(map);
 
     map.on("click", function (e) {
       if (D.placing) { addMark(e.latlng); return; }
       var best = -1, bd = Infinity, p0 = map.latLngToContainerPoint(e.latlng);
       for (var i = 0; i < D.n; i += 1) {
-        var p = map.latLngToContainerPoint([S.lat[i], S.lon[i]]);
+        var p = map.latLngToContainerPoint(D.ll[i]);
         var d = (p.x - p0.x) * (p.x - p0.x) + (p.y - p0.y) * (p.y - p0.y);
         if (d < bd) { bd = d; best = i; }
       }
@@ -295,23 +303,115 @@
     return lg;
   }
 
+  var BASE_OPACITY = 0.25; // the whole route, faintly
+  var TRAIL_S = 60;        // seconds of track lit up behind the boat during replay
+  var LINE = { interactive: false, lineCap: "round", lineJoin: "round" };
+
   function drawTrack() {
-    var S = D.A.series, c = classesFor(D.mode);
-    D.trackLayer.clearLayers();
+    var S = D.A.series, c = classesFor(D.mode), runs = [];
+    // runs of one colour class, split at recording gaps; neighbours share an end point so the line stays continuous
     var start = 0;
-    function flush(endIncl, k) {
-      if (endIncl - start < 1) return;
-      var pts = [];
-      for (var j = start; j <= endIncl; j++) pts.push([S.lat[j], S.lon[j]]);
-      L.polyline(pts, { color: c.colors[k], weight: 3, opacity: 0.95, lineCap: "round", lineJoin: "round", interactive: false }).addTo(D.trackLayer);
-    }
+    function flush(endIncl) { if (endIncl > start) runs.push([start, endIncl, c.cls[start]]); }
     for (var i = 1; i < D.n; i++) {
-      if (S.gap[i]) { flush(i - 1, c.cls[start]); start = i; continue; }
-      if (c.cls[i] !== c.cls[start]) { flush(i, c.cls[start]); start = i; }
+      if (S.gap[i]) { flush(i - 1); start = i; continue; }
+      if (c.cls[i] !== c.cls[start]) { flush(i); start = i; }
     }
-    flush(D.n - 1, c.cls[start]);
+    flush(D.n - 1);
+    D.runs = runs;
+    D.colors = c.colors;
+
+    D.trackLayer.clearLayers();
+    runs.forEach(function (r) {
+      L.polyline(D.ll.slice(r[0], r[1] + 1), Object.assign({ renderer: D.baseRenderer, color: c.colors[r[2]], weight: 3, opacity: 1 }, LINE)).addTo(D.trackLayer);
+    });
+
+    // trail: a halo plus one multi-part line per colour class, created once and re-pointed every frame
+    D.trailLayer.clearLayers();
+    var opt = Object.assign({ renderer: D.trailRenderer }, LINE);
+    D.trailHalo = L.polyline([], Object.assign({ color: TK.css("--surface"), weight: 9, opacity: 0.85 }, opt)).addTo(D.trailLayer);
+    D.trailLines = c.colors.map(function (col) { return L.polyline([], Object.assign({ color: col, weight: 4.5, opacity: 1 }, opt)).addTo(D.trailLayer); });
+    D.trailKey = null;
+    updateTrail(D.idx);
+    if (D.hlIdx) drawHighlight();
+
     D.legendEl.textContent = "";
     D.legendEl.appendChild(c.legend);
+  }
+
+  // Polyline parts covering points i0..i1, grouped by colour class (runs already break at recording gaps).
+  function partsBetween(i0, i1) {
+    var runs = D.runs, byCls = D.colors.map(function () { return []; }), all = [];
+    var lo = 0, hi = runs.length;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (runs[mid][1] <= i0) lo = mid + 1; else hi = mid; }
+    for (var r = lo; r < runs.length && runs[r][0] < i1; r++) {
+      var a = Math.max(runs[r][0], i0), b = Math.min(runs[r][1], i1);
+      if (b <= a) continue;
+      var part = D.ll.slice(a, b + 1);
+      byCls[runs[r][2]].push(part);
+      all.push(part);
+    }
+    return { byCls: byCls, all: all };
+  }
+
+  // Light up the last TRAIL_S seconds up to point i; anything older falls back to the dim base track.
+  function updateTrail(i) {
+    if (!D.trailLines) return;
+    var t = D.X[i] - TRAIL_S, lo = 0, hi = i;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (D.X[mid] < t) lo = mid + 1; else hi = mid; }
+    var key = lo + ":" + i;
+    if (key === D.trailKey) return;
+    D.trailKey = key;
+    var p = partsBetween(lo, i);
+    D.trailHalo.setLatLngs(p.all);
+    D.trailLines.forEach(function (ln, k) {
+      var parts = p.byCls[k];
+      if (!parts.length && ln.tkEmpty) return; // nothing to repaint
+      ln.tkEmpty = !parts.length;
+      ln.setLatLngs(parts);
+    });
+  }
+
+  function hudControl() {
+    var Hud = L.Control.extend({
+      onAdd: function () {
+        var d = L.DomUtil.create("div", "tk-hud");
+        d.setAttribute("role", "group");
+        d.setAttribute("aria-label", "Replay telemetry");
+        L.DomEvent.disableClickPropagation(d);
+        L.DomEvent.disableScrollPropagation(d);
+        var H = (D.hud = {});
+        var grid = el("div", { class: "tk-hud-grid" });
+        [["kn", "Speed", "kn"], ["twa", "Angle to wind", ""], ["hr", "Heart rate", "bpm"], ["vmg", "VMG", "kn"]].forEach(function (m) {
+          var v = el("b"), u = el("small", { text: m[2] }), s = el("span", { class: "s" });
+          H[m[0]] = { v: v, u: u, s: s };
+          grid.appendChild(el("div", { class: "m" }, [el("span", { class: "l", text: m[1] }), el("span", { class: "val" }, [v, u]), s]));
+        });
+        d.appendChild(grid);
+        var wind = el("div", { class: "tk-hud-wind" });
+        wind.innerHTML = '<svg viewBox="-15 -15 30 30" aria-hidden="true"><path d="M0,-12 L0,10 M-5,4 L0,11 L5,4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
+        H.windSvg = wind.querySelector("svg");
+        H.windText = wind.querySelector("span");
+        d.appendChild(wind);
+        return d;
+      },
+    });
+    return new Hud({ position: "topright" });
+  }
+
+  function renderHud(i) {
+    var S = D.A.series, H = D.hud;
+    if (!H) return;
+    var twa = S.twa[i], vmg = S.vmg[i], hr = S.hr[i];
+    H.kn.v.textContent = TK.kn(S.kn[i]);
+    H.twa.v.textContent = twa === null ? "—" : Math.abs(Math.round(twa)) + "°";
+    H.twa.s.textContent = twa === null ? "" : twa > 0 ? "port tack" : "starboard tack";
+    H.hr.v.textContent = hr === null || hr === undefined ? "—" : String(Math.round(hr));
+    H.vmg.v.textContent = TK.kn(vmg);
+    H.vmg.s.textContent = vmg === null || vmg === undefined ? "" : vmg >= 0 ? "upwind" : "downwind";
+    var w = S.wind[i];
+    // the arrow points down (blowing from the north) at 0 deg: rotate by where the wind comes from
+    H.windSvg.style.transform = "rotate(" + w + "deg)";
+    H.windText.textContent = "Wind " + TK.deg(w);
   }
 
   function manIcon(m) {
@@ -376,35 +476,24 @@
     i = Math.max(0, Math.min(D.n - 1, Math.round(i)));
     D.idx = i;
     D.slider.value = i;
-    D.boat.setLatLng([S.lat[i], S.lon[i]]);
-    var svg = D.boat.getElement() && D.boat.getElement().querySelector("svg");
-    if (svg) svg.style.transform = "rotate(" + (S.hdg[i] || 0) + "deg)";
+    D.boat.setLatLng(D.ll[i]);
+    if (!D.boatSvg) D.boatSvg = D.boat.getElement() && D.boat.getElement().querySelector("svg");
+    if (D.boatSvg) D.boatSvg.style.transform = "rotate(" + (S.hdg[i] || 0) + "deg)";
     D.clockEl.textContent = TK.clock(D.X[i], 0, true);
+    updateTrail(i);
+    renderHud(i);
     renderReadout(i);
-    if (D.windCtl) {
-      var w = S.wind[i];
-      // the arrow points down (blowing from the north) at 0 deg: rotate by where the wind comes from
-      D.windCtl.querySelector("svg").style.transform = "rotate(" + w + "deg)";
-      D.windCtl.querySelector("span").textContent = "Wind " + TK.deg(w);
-    }
     if (!fromChart) redrawCharts();
   }
 
+  // speed, angle to wind, VMG and heart rate live in the map HUD; the rest stays under the map
   function renderReadout(i) {
-    var S = D.A.series;
-    var twa = S.twa[i];
-    var items = [
-      [TK.kn(S.kn[i]), "kn speed"],
-      [S.hdg[i] === null ? "—" : Math.round(S.hdg[i]) + "°", "heading"],
-      [twa === null ? "—" : Math.abs(Math.round(twa)) + "° " + (twa > 0 ? "P" : "S"), "TWA"],
-      [TK.kn(S.vmg[i]), "kn VMG"],
-      [S.target_kn[i] === null ? "—" : Math.round((100 * S.kn[i]) / S.target_kn[i]) + "%", "of target " + TK.kn(S.target_kn[i])],
-      [S.on[i] ? "yes" : "no", D.stateName.toLowerCase()],
-      [S.hr[i] === null ? "—" : String(S.hr[i]), "bpm"],
-      [TK.num(S.gain[i], 0), "m upwind"],
-    ];
-    D.readout.textContent = "";
-    items.forEach(function (it) { D.readout.appendChild(el("div", null, [el("b", { text: it[0] }), el("span", { text: it[1] })])); });
+    var S = D.A.series, R = D.readoutVals;
+    R[0][0].textContent = S.hdg[i] === null ? "—" : Math.round(S.hdg[i]) + "°";
+    R[1][0].textContent = S.target_kn[i] === null ? "—" : Math.round((100 * S.kn[i]) / S.target_kn[i]) + "%";
+    R[1][1].textContent = "of target " + TK.kn(S.target_kn[i]);
+    R[2][0].textContent = S.on[i] ? "yes" : "no";
+    R[3][0].textContent = TK.num(S.gain[i], 0);
   }
 
   var lastChartDraw = 0;
@@ -445,22 +534,34 @@
     var S = D.A.series, pts = [];
     for (var i = 0; i < D.n; i += 5) pts.push([S.lat[i], S.lon[i]]);
     D.map.fitBounds(pts, { padding: [16, 16] });
-    D.hl = null;
-    D.hlLayer.clearLayers();
+    clearHighlight();
     D.charts.forEach(function (c) { c.setScale("x", { min: D.X[0], max: D.X[D.n - 1] }); });
     redrawCharts(true);
   }
 
-  function focusRange(i0, i1, iScrub) {
-    var S = D.A.series;
-    i0 = Math.max(0, i0); i1 = Math.min(D.n - 1, i1);
-    var pts = [];
-    for (var i = i0; i <= i1; i++) pts.push([S.lat[i], S.lon[i]]);
+  // the focused maneuver / leg / split: a soft band plus the segment at full strength over the dim base track
+  function drawHighlight() {
     D.hlLayer.clearLayers();
-    if (pts.length > 1) {
-      L.polyline(pts, { color: TK.css("--track-ink"), weight: 9, opacity: 0.25, lineCap: "round", interactive: false }).addTo(D.hlLayer);
-      D.map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
-    }
+    var i0 = D.hlIdx[0], i1 = D.hlIdx[1];
+    if (i1 <= i0) return;
+    L.polyline(D.ll.slice(i0, i1 + 1), Object.assign({ color: TK.css("--track-ink"), weight: 9, opacity: 0.25 }, LINE)).addTo(D.hlLayer);
+    var p = partsBetween(i0, i1);
+    p.byCls.forEach(function (parts, k) {
+      if (parts.length) L.polyline(parts, Object.assign({ color: D.colors[k], weight: 3, opacity: 1 }, LINE)).addTo(D.hlLayer);
+    });
+  }
+
+  function clearHighlight() {
+    D.hl = null;
+    D.hlIdx = null;
+    D.hlLayer.clearLayers();
+  }
+
+  function focusRange(i0, i1, iScrub) {
+    i0 = Math.max(0, i0); i1 = Math.min(D.n - 1, i1);
+    D.hlIdx = [i0, i1];
+    drawHighlight();
+    if (i1 > i0) D.map.fitBounds(D.ll.slice(i0, i1 + 1), { padding: [40, 40], maxZoom: 17 });
     D.hl = [D.X[i0], D.X[i1]];
     var span = D.X[i1] - D.X[i0], pad = Math.max(15, span * 0.25);
     D.charts.forEach(function (c) { c.setScale("x", { min: D.X[i0] - pad, max: D.X[i1] + pad }); });
@@ -591,7 +692,7 @@
       if (downX !== null && Math.abs(e.clientX - downX) < 4 && chart.cursor.idx !== null) setScrub(chart.cursor.idx);
       downX = null;
     });
-    chart.over.addEventListener("dblclick", function () { D.hl = null; D.hlLayer.clearLayers(); });
+    chart.over.addEventListener("dblclick", clearHighlight);
     D.charts.push(chart);
     return chart;
   }

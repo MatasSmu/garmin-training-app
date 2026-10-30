@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gym tracker</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/gym/manifest.webmanifest" crossorigin="use-credentials">
+<meta name="theme-color" content="#0093A8">
+<link rel="stylesheet" href="/static/gym/gym.css">
+</head>
+<body>
+<header class="gbar">
+  <div class="gbar-row">
+    <div class="gbar-title">
+      <h1>Gym</h1>
+      <div class="gbar-week" id="planWeek"></div>
+    </div>
+    <button type="button" class="sync-pill" id="syncStatus" aria-live="polite">…</button>
+  </div>
+  <nav class="day-tabs" id="dayTabs" aria-label="Plan day"></nav>
+</header>
+
+<main id="main" class="gmain">
+  <p class="gmsg">Loading…</p>
+</main>
+
+<div class="rest-bar" id="restBar" hidden>
+  <div class="rest-fill" id="restFill"></div>
+  <span class="rest-label" id="restLabel">Rest</span>
+  <span class="rest-time mono" id="restTime">0:00</span>
+  <button type="button" class="rest-btn" id="restPlus">+15 s</button>
+  <button type="button" class="rest-btn" id="restSkip">Skip</button>
+</div>
+
+<script src="/static/gym/gym.js"></script>
+</body>
+</html>

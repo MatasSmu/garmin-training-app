@@ -33,6 +33,13 @@ def norm_ts(value: str | None) -> str | None:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ") if dt else None
 
 
+def norm_ts_ms(value: str | None) -> str | None:
+    """Like norm_ts but keeps milliseconds: used for updated_at, where two
+    edits within one second must still compare as different."""
+    dt = parse_ts(value)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z" if dt else None
+
+
 def local_date(ts: str | None) -> date | None:
     dt = parse_ts(ts)
     return dt.astimezone().date() if dt else None
@@ -147,7 +154,7 @@ def upsert_session(conn: sqlite3.Connection, s: dict) -> str:
     'unchanged' or 'stale' (the server copy was edited later; kept as is).
     Sets of the session missing from `s['sets']` are deleted -- the phone always
     sends the complete list, so an un-ticked set disappears on the server too."""
-    incoming = norm_ts(s["updated_at"])
+    incoming = norm_ts_ms(s["updated_at"])
     row = conn.execute("SELECT client_updated_at FROM gym_sessions WHERE id = ?", (s["id"],)).fetchone()
     if row is not None:
         if row["client_updated_at"] > incoming:
@@ -247,8 +254,8 @@ def update_session(conn: sqlite3.Connection, session_id: str, fields: dict) -> b
         raise ValueError("unknown plan day")
     now = _now()
     # Strictly newer than the copy it replaces, even if the phone's clock runs ahead.
-    bumped = (parse_ts(row["client_updated_at"]) + timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    values.update({"client_updated_at": max(now, bumped), "updated_at": now})
+    bumped = norm_ts_ms((parse_ts(row["client_updated_at"]) + timedelta(milliseconds=1)).isoformat())
+    values.update({"client_updated_at": max(norm_ts_ms(now), bumped), "updated_at": now})
     if {"started_at", "ended_at"} & fields.keys():
         values["garmin_activity_id"] = None  # times moved: match again
     conn.execute(

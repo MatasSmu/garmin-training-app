@@ -208,3 +208,19 @@ details.panel[open] > summary{margin-bottom:14px;}
 .tk-ai li{margin:2px 0;}
 .tk-focus{background:var(--teal-soft); border-radius:10px; padding:8px 12px 10px; margin:10px 0;}
 .tk-focus h4{margin-top:2px; color:var(--teal-strong);}
+
+/* ---- Gym tab (gym-analysis.js) ---------------------------------------- */
+#gymRoot .btn-primary{display:inline-block; text-decoration:none;}
+#gymRoot select{min-height:36px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); padding:4px 8px; max-width:100%;}
+.gym-chart{margin:8px 0 12px;}
+.gym-chart > svg{max-width:640px; display:block;}
+.gym-note{font-size:14px; margin:8px 0;}
+.gym-edit{margin-top:16px; border-top:1px solid var(--border); padding-top:12px;}
+.gym-edit h3{font-size:15px; margin:0 0 8px;}
+.gym-edit-row{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:10px;}
+.gym-field{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--ink-muted); margin-bottom:10px;}
+.gym-field input, .gym-field select, .gym-field textarea{
+  min-height:36px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); padding:4px 8px; font:inherit;
+}
+.gym-field textarea{min-width:min(480px, 100%);}
+.tk-table tr.gym-short td:nth-child(4){color:var(--accent);}

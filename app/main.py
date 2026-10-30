@@ -62,6 +62,6 @@ def _versioned(html: str, name: str) -> str:
 @app.get("/")
 def index():
     html = (STATIC_DIR / "index.html").read_text()
-    for name in ("app.js", "style.css", "tracks-core.js", "tracks-detail.js", "tracks.js", "tracks.css"):
+    for name in ("app.js", "style.css", "tracks-core.js", "tracks-detail.js", "tracks.js", "tracks.css", "gym-analysis.js"):
         html = _versioned(html, name)
     return HTMLResponse(html)

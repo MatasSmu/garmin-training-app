@@ -238,6 +238,34 @@ def _sailing_focus_briefing(focus: dict) -> list[str]:
     return lines
 
 
+def _gym_briefing(gym: dict) -> list[str]:
+    """Coach's gym plan and the last few logged workouts, one line each."""
+    if not gym:
+        return []
+    week = gym.get("week_now")
+    when = (f"week {week} of {gym['weeks']}" if week and 1 <= week <= (gym.get("weeks") or 0)
+            else f"starts {gym['start_date']}" if week is not None and week < 1 else "finished")
+    lines = [f"- Gym plan '{gym['plan']}' ({when}); days: {', '.join(gym['schedule'])}."]
+    if gym.get("sessions"):
+        lines.append("- Recent gym workouts from the gym tracker (newest first; sets done/planned, "
+                     "reps done/plan minimum; top = heaviest set per exercise):")
+        for s in gym["sessions"]:
+            bits = [f"{s['date']} day {s['day']}", s.get("location"),
+                    f"{s['duration_min']} min" if s.get("duration_min") is not None else "in progress",
+                    f"sets {s['sets']}", f"reps {s['reps']}", f"volume {s['volume_kg']} kg"]
+            if s.get("avg_hr"):
+                bits.append(f"avg HR {round(s['avg_hr'])}")
+            line = "  - " + ", ".join(b for b in bits if b)
+            if s.get("top"):
+                line += " | top: " + "; ".join(s["top"])
+            if s.get("notes"):
+                line += f" | note: {s['notes']}"
+            lines.append(line)
+    else:
+        lines.append("- No gym workouts logged in the gym tracker yet.")
+    return lines
+
+
 def _context_briefing(ctx: dict) -> str:
     """Render the full metrics context as plain-language facts for the
     DeepSeek system prompt."""
@@ -270,6 +298,7 @@ def _context_briefing(ctx: dict) -> str:
     else:
         lines.append("- No journal entries in the last 14 days.")
     lines.extend(_sailing_focus_briefing(ctx.get("sailing_focus") or {}))
+    lines.extend(_gym_briefing(ctx.get("gym") or {}))
     if ctx.get("calendar"):
         lines.extend(_calendar_briefing(ctx["calendar"]))
     if ctx.get("wind_briefing"):
@@ -320,6 +349,14 @@ The calendar is what the athlete intends; Garmin sessions are what actually happ
 When you plan the athlete's week or an on-water session, build the sailing sessions around \
 the "sailing focus" points below (from the per-session iQFOIL analyses and the weekly \
 summary): turn them into concrete session goals, and match them to the wind forecast.
+
+The athlete logs gym workouts set by set in the gym tracker (the coach's 8-week \
+plan, days A-D). The summary below lists the latest ones; for the full sets of a \
+workout call find_gym_workouts / get_gym_workout, and for the plan itself -- \
+exercises and targets per day, plus the cardio sessions, the athlete's own HR \
+zones and the nutrition targets -- call get_gym_plan. Use those HR zones for any \
+HR advice. A gym workout may also appear as a Garmin strength_training session \
+(same time); the tracker has the real sets, Garmin has the heart rate.
 
 You can also write to the calendar with add_calendar_event, update_calendar_event \
 and delete_calendar_event (entries are referenced by their [#id] -- internal, never \

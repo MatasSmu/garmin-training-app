@@ -200,3 +200,14 @@ def test_sync_rejects_bad_payload(client):
     bad = _payload(_day_id(client, "A"))
     del bad["sessions"][0]["updated_at"]
     assert client.post("/api/gym/sync", json=bad).status_code == 422
+
+
+def test_two_edits_within_one_second_both_sync(client, conn):
+    p = _payload(_day_id(client, "A"), updated="2026-11-02T14:20:05.100Z")
+    sid = p["sessions"][0]["id"]
+    client.post("/api/gym/sync", json=p)
+    p2 = copy.deepcopy(p)
+    p2["sessions"][0]["updated_at"] = "2026-11-02T14:20:05.900Z"
+    p2["sessions"][0]["notes"] = "second edit"
+    assert client.post("/api/gym/sync", json=p2).json()["results"] == {sid: "updated"}
+    assert client.get(f"/api/gym/sessions/{sid}").json()["notes"] == "second edit"

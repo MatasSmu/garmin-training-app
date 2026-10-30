@@ -14,6 +14,7 @@ import sqlite3
 from pydantic import ValidationError
 
 from app.calendar_schema import CalendarEvent
+from app.gym import store as gym_store
 from app.sailing.reports import coach_session_view, track_detail
 from app.db import (
     CALENDAR_FIELDS,
@@ -216,9 +217,96 @@ TOOL_SPECS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_gym_workouts",
+            "description": (
+                "List gym workouts logged in the gym tracker (newest first): id, date, plan day A-D, "
+                "location, minutes, sets and reps done vs planned, volume, Garmin HR if linked. Use it "
+                "to find a workout, then get_gym_workout for its sets."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive"},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive"},
+                    "limit": {"type": "integer", "description": "Max rows (default 10)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_gym_workout",
+            "description": (
+                "Every set of one gym-tracker workout by id: per exercise the plan target and the "
+                "logged reps / kg / seconds, whether each set was done as planned, the 1-5 feel, "
+                "the note and Garmin HR."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}},
+                "required": ["id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_gym_plan",
+            "description": (
+                "The coach's current training plan: gym days A-D with exercises and targets, general "
+                "rules, the cardio / VO2max sessions, the athlete's HR zones and nutrition targets."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_gym_exercise_history",
+            "description": (
+                "One exercise's history across all gym workouts: per workout the sets, top kg, "
+                "estimated 1RM (Epley), reps and volume. exercise_id is the plan key, e.g. "
+                "back_squat, bench_press, romanian_deadlift, pull_up."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"exercise_id": {"type": "string"}},
+                "required": ["exercise_id"],
+            },
+        },
+    },
 ]
 
 FIND_CALENDAR_LIMIT_MAX = 100
+FIND_GYM_LIMIT_MAX = 30
+
+
+def find_gym_workouts(conn: sqlite3.Connection, start_date: str | None = None, end_date: str | None = None,
+                      limit: int = 10) -> dict:
+    limit = max(1, min(int(limit or 10), FIND_GYM_LIMIT_MAX))
+    rows = gym_store.list_sessions(conn, limit=500)
+    rows = [r for r in rows if (not start_date or (r["date"] or "") >= start_date)
+            and (not end_date or (r["date"] or "") <= end_date)][:limit]
+    return {"workouts": rows}
+
+
+def get_gym_workout(conn: sqlite3.Connection, id: str) -> dict:
+    return gym_store.session_detail(conn, str(id)) or {"error": f"no gym workout with id {id}"}
+
+
+def get_gym_plan(conn: sqlite3.Connection) -> dict:
+    return gym_store.plan_extras(conn) or {"error": "no gym plan imported"}
+
+
+def get_gym_exercise_history(conn: sqlite3.Connection, exercise_id: str) -> dict:
+    out = gym_store.exercise_history(conn, str(exercise_id))
+    if out is None:
+        return {"error": f"unknown exercise {exercise_id}", "known": sorted(gym_store.exercises(conn))}
+    return out
 
 
 def _summary_line(row: sqlite3.Row) -> dict:
@@ -370,6 +458,10 @@ _EXECUTORS = {
     "get_session_details": get_session_details,
     "get_session_track_detail": get_session_track_detail,
     "find_calendar_events": find_calendar_events,
+    "find_gym_workouts": find_gym_workouts,
+    "get_gym_workout": get_gym_workout,
+    "get_gym_plan": get_gym_plan,
+    "get_gym_exercise_history": get_gym_exercise_history,
 }
 
 # Tools that change the calendar get the per-reply change log as well, so the

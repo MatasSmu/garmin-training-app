@@ -540,14 +540,18 @@ def coach_summary(conn: sqlite3.Connection, limit: int = 6) -> dict:
         "sessions": [],
     }
     for s in list_sessions(conn, limit=limit):
-        top = conn.execute(
-            """SELECT exercise_id, MAX(weight_kg) AS kg, MAX(reps) AS reps, MAX(duration_sec) AS sec
-               FROM gym_set_logs WHERE session_id = ? GROUP BY exercise_id ORDER BY MAX(weight_kg) DESC LIMIT 4""",
-            (s["id"],),
-        ).fetchall()
+        # Each exercise's heaviest set (then most reps / longest), heaviest exercises first.
+        best: dict[str, sqlite3.Row] = {}
+        for x in conn.execute("SELECT * FROM gym_set_logs WHERE session_id = ?", (s["id"],)):
+            key = (x["weight_kg"] or 0, x["reps"] or 0, x["duration_sec"] or 0)
+            cur = best.get(x["exercise_id"])
+            if cur is None or key > (cur["weight_kg"] or 0, cur["reps"] or 0, cur["duration_sec"] or 0):
+                best[x["exercise_id"]] = x
+        top = sorted(best.values(), key=lambda x: -(x["weight_kg"] or 0))[:4]
         lifts = [
             f"{ex.get(t['exercise_id'], {}).get('name_en') or t['exercise_id']} "
-            + (f"{t['kg']:g} kg x{t['reps']}" if t["kg"] else f"{t['reps']} reps" if t["reps"] else f"{t['sec']} s")
+            + (f"{t['weight_kg']:g} kg x{t['reps']}" if t["weight_kg"] and t["reps"] is not None
+               else f"{t['reps']} reps" if t["reps"] else f"{t['duration_sec']} s")
             for t in top
         ]
         out["sessions"].append({

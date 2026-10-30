@@ -59,6 +59,9 @@ def test_route_responds(base, path):
 def test_auth_still_required(base):
     assert httpx.get(base + "/", timeout=10).status_code == 401
     assert httpx.get(base + "/api/gym/bootstrap", timeout=10).status_code == 401
+    assert httpx.get(base + "/gym-login", timeout=10).status_code == 401
+    r = httpx.get(base + "/gym-login", auth=AUTH, timeout=10, follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (307, "/gym/")
 
 
 def test_index_has_gym_tab(base):

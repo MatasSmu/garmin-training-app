@@ -40,6 +40,23 @@ and for the **Analyse** button; uploads and samples work without them.
 Weather comes from Open-Meteo (free, no key) and map tiles from Esri /
 OpenStreetMap, so those features need internet.
 
+## Gym tracker
+
+* **`/gym/`** is a phone-first, offline logger for the coach's gym plan
+  (`gym_plan.json`, loaded with `venv/bin/python -m app.gym.plan_import`,
+  idempotent). It is a PWA: after one visit it works with no server, keeps
+  everything in IndexedDB and syncs (`POST /api/gym/sync`, upsert by UUID) when
+  the laptop is reachable again.
+* **Gym tab:** workout history, planned vs done, Garmin HR of the overlapping
+  strength activity, per-exercise top weight / e1RM, and weekly volume. Location
+  and times are editable.
+* **Coach:** recent gym workouts are in the coach's briefing. Its tools read
+  single workouts, exercise history and the plan (incl. cardio, HR zones and nutrition).
+
+Setup (Tailscale HTTPS for the phone, installing the PWA, testing in
+airplane mode, moving to a Raspberry Pi): `docs/gym-tracker-setup.md`.
+Design decisions: `docs/gym-tracker-plan.md`.
+
 ## Keeping data up to date
 
 * **Sync Garmin** button (top right of every page): pulls new activities and

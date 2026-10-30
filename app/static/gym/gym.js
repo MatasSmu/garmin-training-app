@@ -852,7 +852,11 @@
     if (t) document.querySelector('.day-tab[data-day="' + t.dataset.day + '"]').click();
   });
 
-  document.getElementById("syncStatus").addEventListener("click", function () { syncNow(); });
+  document.getElementById("syncStatus").addEventListener("click", function () {
+    // The browser forgot the login: a plain reload would come from the cache.
+    if (sync.error && sync.error.status === 401) location.href = "/gym-login";
+    else syncNow();
+  });
 
   // ================================================================ start-up
   function flush() {

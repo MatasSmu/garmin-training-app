@@ -173,6 +173,14 @@ def gym_redirect():
     return RedirectResponse("/gym/")
 
 
+@router.get("/gym-login", include_in_schema=False)
+def gym_login():
+    """Outside the service worker's scope, so the browser really asks for the
+    login (the auth middleware answers 401) instead of getting the cached page;
+    afterwards it lands back on the logger."""
+    return RedirectResponse("/gym/")
+
+
 @router.get("/gym/", include_in_schema=False)
 def gym_page():
     return FileResponse(GYM_STATIC / "index.html", media_type="text/html")

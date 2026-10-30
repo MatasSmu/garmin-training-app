@@ -1,0 +1,223 @@
+{
+  "plan": {
+    "name": "Žiemos planas – 8 savaitės",
+    "author": "coach",
+    "start_date": "2026-11-01",
+    "weeks": 8,
+    "athlete": { "bodyweight_kg": 81, "height_cm": 173, "target_bodyweight_kg": 86, "target_by": "2 months" }
+  },
+
+  "general_rules": [
+    "Before working sets for big muscle groups (legs, chest, back) one lighter warm-up set is allowed.",
+    "If unusual pain/discomfort appears: reduce weight or stop at the rep where discomfort starts.",
+    "Use a lifting belt for squats and Romanian deadlifts (strength day).",
+    "Superset = exercises with the same superset_group are done back to back, then rest."
+  ],
+
+  "locations": [
+    { "id": "bsb", "name": "Sporto salė (BSB)" },
+    { "id": "zb",  "name": "Sporto salė (ŽB)" }
+  ],
+
+  "schedule": {
+    "_note": "These are DEFAULTS only. When logging, location (from 'locations', or add a new one) and actual start/end time are chosen per session and can differ from the plan.",
+    "sessions": [
+      { "workout_id": "A", "weekday": "Monday",    "default_time": "15:00-17:00", "default_location": "bsb" },
+      { "workout_id": "B", "weekday": "Wednesday", "default_time": "20:00-21:00", "default_location": "zb" },
+      { "workout_id": "C", "weekday": "Thursday",  "default_time": "17:00-19:00", "default_location": "bsb" },
+      { "workout_id": "D", "weekday": "Saturday",  "default_time": "10:45-11:45", "default_location": "bsb" }
+    ]
+  },
+
+  "exercises": {
+    "pull_up":               { "name_lt": "Prisitraukimai", "name_en": "Pull-ups", "type": "bodyweight" },
+    "push_up":               { "name_lt": "Atsispaudimai", "name_en": "Push-ups", "type": "bodyweight" },
+    "back_squat":            { "name_lt": "Pritūpimai", "name_en": "Back squat", "type": "weighted" },
+    "bench_press":           { "name_lt": "Štangos spaudimas", "name_en": "Barbell bench press", "type": "weighted" },
+    "machine_back_pull":     { "name_lt": "Trauka nugarai treniruoklyje", "name_en": "Machine back pull", "type": "weighted" },
+    "bulgarian_split_squat": { "name_lt": "Bulgariški įtupstai", "name_en": "Bulgarian split squat", "type": "weighted", "per_side": true },
+    "machine_chest_fly":     { "name_lt": "Tiesių rankų suvedimas treniruoklyje", "name_en": "Machine chest fly", "type": "weighted" },
+    "hammer_curl":           { "name_lt": "Plaktukas", "name_en": "Hammer curl", "type": "weighted" },
+    "abs_60_60_60":          { "name_lt": "Presas (60-60-60)", "name_en": "Abs circuit 60-60-60", "type": "timed",
+                               "notes": "60 s opposite arm/leg, 60 s rotations with 3-5 kg feet raised, 60 s mountain climbers" },
+    "plank":                 { "name_lt": "Lenta", "name_en": "Plank", "type": "timed" },
+    "romanian_deadlift":     { "name_lt": "Romėniška mirties trauka", "name_en": "Romanian deadlift", "type": "weighted" },
+    "incline_bench_press":   { "name_lt": "Štangos spaudimas nuo kampinio suoliuko", "name_en": "Incline barbell bench press", "type": "weighted" },
+    "seated_cable_row":      { "name_lt": "Nugaros trauka sėdint (cable row)", "name_en": "Seated cable row", "type": "weighted" },
+    "leg_press":             { "name_lt": "Kojų spaudimas treniruoklyje", "name_en": "Leg press", "type": "weighted" },
+    "dips":                  { "name_lt": "Atsispaudimai lygiagretėse", "name_en": "Dips", "type": "bodyweight_plus",
+                               "notes": "Min 90° angle. Add weight if 10 reps are easy." },
+    "dumbbell_curl":         { "name_lt": "Dilbio lenkimas su laisvais svoriais", "name_en": "Dumbbell biceps curl", "type": "weighted" },
+    "machine_leg_raise":     { "name_lt": "Tiesių kojų kėlimai treniruoklyje", "name_en": "Machine leg raises", "type": "bodyweight" },
+    "wall_sit":              { "name_lt": "Kėdė prie sienos", "name_en": "Wall sit", "type": "timed_weighted" },
+    "hip_thrust":            { "name_lt": "Dubens kėlimas nuo suoliuko su štanga", "name_en": "Barbell hip thrust", "type": "weighted" },
+    "dumbbell_chest_press":  { "name_lt": "Hantelių spaudimas krūtinei", "name_en": "Dumbbell chest press", "type": "weighted",
+                               "weight_mode": "total", "notes": "Logged weight = both dumbbells together" },
+    "lat_pulldown":          { "name_lt": "Trauka nugarai iš viršaus", "name_en": "Lat pulldown", "type": "weighted" },
+    "leg_extension":         { "name_lt": "Blauzdų tiesimas treniruoklyje", "name_en": "Leg extension", "type": "weighted" },
+    "leg_curl":              { "name_lt": "Blauzdų lenkimas treniruoklyje", "name_en": "Leg curl", "type": "weighted" },
+    "pullover":              { "name_lt": "Pulloveris", "name_en": "Pullover", "type": "weighted" },
+    "rope_curl":             { "name_lt": "Dilbio lenkimas su virve", "name_en": "Rope biceps curl", "type": "weighted" },
+    "rope_triceps_ext":      { "name_lt": "Dilbio tiesimas su virve", "name_en": "Rope triceps extension", "type": "weighted" },
+    "swimmers":              { "name_lt": "Plaukimas", "name_en": "Swimmers (prone)", "type": "timed" },
+    "kettlebell_overhead":   { "name_lt": "Giros išmetimai į viršų", "name_en": "Kettlebell overhead throw/snatch", "type": "weighted" },
+    "plank_wall_sit_combo":  { "name_lt": "Lenta (10 kg) + kėdė prie sienos (10 kg)", "name_en": "Weighted plank + wall sit", "type": "timed_weighted" }
+  },
+
+  "workouts": [
+    {
+      "id": "A",
+      "name": "A diena (Treniruotė nr. 1)",
+      "weekday": "Monday",
+      "focus": "hypertrophy",
+      "duration_min": 80,
+      "warmup_min": 5,
+      "items": [
+        { "order": 1, "exercise": "pull_up",               "sets": 3, "reps_min": 10, "reps_max": 12, "superset_group": "S1", "rest_sec": 0 },
+        { "order": 2, "exercise": "push_up",               "sets": 3, "reps_min": 18, "reps_max": 20, "superset_group": "S1", "rest_sec": 90 },
+        { "order": 3, "exercise": "back_squat",            "sets": 3, "reps_min": 8,  "reps_max": 10, "weight_kg_min": 80, "weight_kg_max": 90, "rest_sec": 120 },
+        { "order": 4, "exercise": "bench_press",           "sets": 3, "reps_min": 10, "reps_max": 10, "weight_kg": 60, "rest_sec": 90 },
+        { "order": 5, "exercise": "machine_back_pull",     "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 6, "exercise": "bulgarian_split_squat", "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90, "notes": "reps per leg" },
+        { "order": 7, "exercise": "machine_chest_fly",     "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 8, "exercise": "hammer_curl",           "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 60 },
+        { "order": 9, "exercise": "abs_60_60_60",          "sets": 2, "duration_sec": 180, "rest_sec": 60 },
+        { "order": 10, "exercise": "plank",                "sets": 1, "duration_sec_min": 120, "duration_sec_max": 180 }
+      ],
+      "cooldown": "Stretching"
+    },
+    {
+      "id": "B",
+      "name": "B diena (Treniruotė nr. 2)",
+      "weekday": "Wednesday",
+      "focus": "hypertrophy",
+      "duration_min": 80,
+      "warmup_min": 5,
+      "items": [
+        { "order": 1, "exercise": "pull_up",             "sets": 3, "reps_min": 10, "reps_max": 12, "superset_group": "S1", "rest_sec": 0 },
+        { "order": 2, "exercise": "push_up",             "sets": 3, "reps_min": 18, "reps_max": 20, "superset_group": "S1", "rest_sec": 90 },
+        { "order": 3, "exercise": "romanian_deadlift",   "sets": 3, "reps_min": 8,  "reps_max": 10, "weight_kg": 120, "rest_sec": 120 },
+        { "order": 4, "exercise": "incline_bench_press", "sets": 3, "reps_min": 10, "reps_max": 10, "weight_kg_min": 45, "weight_kg_max": 50, "rest_sec": 90 },
+        { "order": 5, "exercise": "seated_cable_row",    "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 6, "exercise": "leg_press",           "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 7, "exercise": "dips",                "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 8, "exercise": "dumbbell_curl",       "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 60 },
+        { "order": 9, "exercise": "machine_leg_raise",   "sets": 4, "reps_min": 20, "reps_max": 25, "rest_sec": 60 },
+        { "order": 10, "exercise": "wall_sit",           "sets": 1, "weight_kg": 5, "duration_sec_min": 120, "duration_sec_max": 180 }
+      ],
+      "cooldown": "Stretching"
+    },
+    {
+      "id": "C",
+      "name": "C diena (Treniruotė nr. 3)",
+      "weekday": "Thursday",
+      "focus": "hypertrophy",
+      "duration_min": 80,
+      "warmup_min": 5,
+      "items": [
+        { "order": 1, "exercise": "pull_up",              "sets": 3, "reps_min": 10, "reps_max": 12, "superset_group": "S1", "rest_sec": 0 },
+        { "order": 2, "exercise": "push_up",              "sets": 3, "reps_min": 18, "reps_max": 20, "superset_group": "S1", "rest_sec": 90 },
+        { "order": 3, "exercise": "hip_thrust",           "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 120 },
+        { "order": 4, "exercise": "dumbbell_chest_press", "sets": 3, "reps_min": 8,  "reps_max": 10, "weight_kg": 45, "rest_sec": 90, "notes": "45 kg total (both dumbbells)" },
+        { "order": 5, "exercise": "lat_pulldown",         "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 6, "exercise": "leg_extension",        "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 7, "exercise": "leg_curl",             "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 8, "exercise": "pullover",             "sets": 3, "reps_min": 10, "reps_max": 10, "rest_sec": 90 },
+        { "order": 9, "exercise": "rope_curl",            "sets": 3, "reps_min": 10, "reps_max": 12, "superset_group": "S2", "rest_sec": 0 },
+        { "order": 10, "exercise": "rope_triceps_ext",    "sets": 3, "reps_min": 10, "reps_max": 12, "superset_group": "S2", "rest_sec": 60 },
+        { "order": 11, "exercise": "swimmers",            "sets": 3, "duration_sec": 60, "rest_sec": 60 }
+      ],
+      "cooldown": "Stretching"
+    },
+    {
+      "id": "D",
+      "name": "D diena (Treniruotė nr. 4)",
+      "weekday": "Saturday",
+      "focus": "strength",
+      "duration_min": 60,
+      "warmup_min": 5,
+      "items": [
+        { "order": 1, "exercise": "back_squat",           "sets": 3, "reps_min": 3, "reps_max": 5, "weight_kg": 100, "rest_sec": 180, "notes": "belt" },
+        { "order": 2, "exercise": "bench_press",          "sets": 4, "reps_min": 3, "reps_max": 5, "weight_kg": 70,  "rest_sec": 180 },
+        { "order": 3, "exercise": "romanian_deadlift",    "sets": 3, "reps_min": 3, "reps_max": 5, "weight_kg": 140, "rest_sec": 180, "notes": "belt" },
+        { "order": 4, "exercise": "machine_back_pull",    "sets": 4, "reps_min": 4, "reps_max": 6, "rest_sec": 120 },
+        { "order": 5, "exercise": "kettlebell_overhead",  "sets": 3, "reps_min": 4, "reps_max": 6, "weight_kg_min": 16, "weight_kg_max": 24, "rest_sec": 120 },
+        { "order": 6, "exercise": "plank_wall_sit_combo", "sets": 1, "duration_sec": 60, "weight_kg": 10 }
+      ],
+      "cooldown": "Stretching"
+    }
+  ],
+
+  "hr_zones": {
+    "_note": "Matas's own zones - use these for all HR analysis in the app.",
+    "max_hr": 200,
+    "zones": [
+      { "zone": 1, "bpm_min": null, "bpm_max": 130 },
+      { "zone": 2, "bpm_min": 130,  "bpm_max": 145 },
+      { "zone": 3, "bpm_min": 147,  "bpm_max": 175, "_check": "assumed 147-175 (user wrote 147-147); also 145-147 is not covered by any zone" },
+      { "zone": 4, "bpm_min": 175,  "bpm_max": 188 },
+      { "zone": 5, "bpm_min": 188,  "bpm_max": 200 }
+    ]
+  },
+
+  "cardio": {
+    "_note": "Tracked by Garmin, not logged in the gym tracker. Included so the coach chat knows the plan. Zone numbers refer to hr_zones above.",
+    "sessions": [
+      {
+        "id": "VO2MAX_1",
+        "name": "4x4 min intervals",
+        "modes": ["run", "bike", "Concept2 row", "SkiErg"],
+        "alternates_weekly_with": "VO2MAX_2",
+        "duration_min": 45,
+        "structure": [
+          { "part": "warmup", "duration_min": 10, "zone": 2 },
+          { "part": "interval", "repeats": 4, "work_min": 4, "work_zone": 5, "rest_min": 3, "rest_zone": 2 },
+          { "part": "cooldown", "duration_min_min": 5, "duration_min_max": 10, "zone": 1 }
+        ],
+        "notes": "HR reaches zone 5 during the 2nd work minute. Active rest - don't sit, keep HR above zone 2."
+      },
+      {
+        "id": "VO2MAX_2",
+        "name": "30/15 s intervals (run)",
+        "modes": ["run"],
+        "alternates_weekly_with": "VO2MAX_1",
+        "duration_min": 50,
+        "structure": [
+          { "part": "warmup", "duration_min": 10, "zone": 2 },
+          { "part": "interval", "rounds": 3, "repeats_per_round": 12, "work_sec": 30, "work": "max effort run", "rest_sec": 15, "rest": "walk, HR stays high", "rest_between_rounds_min": 3, "rest_between_rounds_zone": 2 },
+          { "part": "cooldown", "duration_min": 5, "zone": 1 }
+        ],
+        "notes": "Active rest - don't sit."
+      },
+      {
+        "id": "CARDIO",
+        "name": "Steady cardio",
+        "modes": ["run", "bike", "Concept2 row", "SkiErg"],
+        "duration_min_min": 45,
+        "duration_min_max": 55,
+        "structure": [
+          { "part": "warmup", "duration_min": 5, "zone": 2 },
+          { "part": "steady", "duration_min_min": 30, "duration_min_max": 40, "target_bpm_min": 155, "target_bpm_max": 165 },
+          { "part": "cooldown", "duration_min": 5, "zone": 1 },
+          { "part": "stretching", "duration_min": 5 }
+        ],
+        "notes": "Most important: continuous work for 30-40 min at 155-165 bpm."
+      }
+    ]
+  },
+
+  "nutrition": {
+    "kcal_per_day_min": 4000,
+    "kcal_per_day_max": 4200,
+    "protein_g_per_kg": "2-2.2",
+    "protein_g_per_day": 160,
+    "notes": "If not counting calories: eat a lot, 4-5 meals/day + snacks.",
+    "supplements": [
+      "Fish oil 2000 mg EPA+DHA (3 Fjord capsules/day)",
+      "Vitamin D3 1000 IU in the morning after food",
+      "Creatine monohydrate 5-10 g",
+      "Protein powder if food protein is not enough",
+      "Magnesium bisglycinate before sleep"
+    ]
+  }
+}

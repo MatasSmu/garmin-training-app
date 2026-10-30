@@ -235,3 +235,99 @@ CREATE TABLE IF NOT EXISTS llm_usage (
   created_at         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_llm_usage_ref ON llm_usage(purpose, ref);
+
+-- ---------------------------------------------------------------------------
+-- Gym tracker (app/gym). The plan comes from gym_plan.json via
+-- `python -m app.gym.plan_import`; sessions, sets and user-added locations are
+-- logged on the phone (offline first) and synced with client-generated UUIDs,
+-- so re-sending the same data never duplicates anything.
+CREATE TABLE IF NOT EXISTS gym_locations (
+  id          TEXT PRIMARY KEY,              -- 'bsb' for seeded ones, else a UUID
+  name        TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gym_plans (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT NOT NULL,
+  start_date   TEXT NOT NULL,
+  weeks        INTEGER,
+  source_json  TEXT NOT NULL,                -- the whole plan file; cardio/hr_zones/nutrition are read from here
+  updated_at   TEXT NOT NULL,
+  UNIQUE (name, start_date)
+);
+
+CREATE TABLE IF NOT EXISTS gym_plan_days (
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_id              INTEGER NOT NULL REFERENCES gym_plans(id) ON DELETE CASCADE,
+  code                 TEXT NOT NULL,         -- 'A' .. 'D'
+  name                 TEXT,
+  weekday              INTEGER NOT NULL,      -- 0 = Monday
+  default_time         TEXT,                  -- '15:00-17:00'
+  default_location_id  TEXT REFERENCES gym_locations(id) ON DELETE SET NULL,
+  focus                TEXT,
+  duration_min         INTEGER,
+  warmup_min           INTEGER,
+  cooldown             TEXT,
+  UNIQUE (plan_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS gym_exercises (
+  id           TEXT PRIMARY KEY,              -- key from the plan file, e.g. 'bench_press'
+  name_lt      TEXT NOT NULL,
+  name_en      TEXT,
+  type         TEXT NOT NULL,                 -- weighted | bodyweight | bodyweight_plus | timed | timed_weighted
+  per_side     INTEGER NOT NULL DEFAULT 0,
+  weight_mode  TEXT,                          -- 'total' = both dumbbells together
+  notes        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS gym_plan_exercises (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_day_id       INTEGER NOT NULL REFERENCES gym_plan_days(id) ON DELETE CASCADE,
+  position          INTEGER NOT NULL,
+  exercise_id       TEXT NOT NULL REFERENCES gym_exercises(id),
+  sets              INTEGER NOT NULL,
+  reps_min          INTEGER,
+  reps_max          INTEGER,
+  weight_kg         REAL,
+  weight_kg_min     REAL,
+  weight_kg_max     REAL,
+  duration_sec      INTEGER,
+  duration_sec_min  INTEGER,
+  duration_sec_max  INTEGER,
+  rest_sec          INTEGER,
+  superset_group    TEXT,
+  notes             TEXT,
+  UNIQUE (plan_day_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS gym_sessions (
+  id                  TEXT PRIMARY KEY,       -- client UUID
+  plan_day_id         INTEGER REFERENCES gym_plan_days(id) ON DELETE SET NULL,
+  location_id         TEXT REFERENCES gym_locations(id) ON DELETE SET NULL,
+  started_at          TEXT,                   -- ISO 8601 UTC
+  ended_at            TEXT,
+  notes               TEXT,
+  garmin_activity_id  INTEGER REFERENCES sessions(activity_id) ON DELETE SET NULL,
+  client_updated_at   TEXT NOT NULL,          -- last-write-wins between phone and laptop edits
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gym_sessions_started ON gym_sessions(started_at);
+
+CREATE TABLE IF NOT EXISTS gym_set_logs (
+  id                    TEXT PRIMARY KEY,     -- client UUID
+  session_id            TEXT NOT NULL REFERENCES gym_sessions(id) ON DELETE CASCADE,
+  exercise_id           TEXT NOT NULL REFERENCES gym_exercises(id),
+  set_number            INTEGER NOT NULL,
+  reps                  INTEGER,
+  weight_kg             REAL,
+  duration_sec          INTEGER,
+  rpe                   INTEGER,              -- 1-5 feeling, given per exercise
+  completed_as_planned  INTEGER NOT NULL DEFAULT 0,
+  done_at               TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gym_sets_session ON gym_set_logs(session_id);
+CREATE INDEX IF NOT EXISTS idx_gym_sets_exercise ON gym_set_logs(exercise_id);

@@ -1,10 +1,18 @@
 """Tests never talk to DeepSeek: the key is blanked and the HTTP call
 replaced. Tests that exercise the analysis install their own fake."""
 
-import pytest
+import os
+import tempfile
+from pathlib import Path
 
-from app import config
-from app.sailing import deepseek
+# Before anything imports app.config: importing app.main runs init_db on
+# config.DB_PATH, and tests must never open the real data/garmin.db.
+os.environ["APP_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="garmin-tests-")) / "app.db")
+
+import pytest  # noqa: E402
+
+from app import config  # noqa: E402
+from app.sailing import deepseek  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

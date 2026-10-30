@@ -8,11 +8,13 @@ from dotenv import load_dotenv
 from garmin_auth import DEFAULT_TOKEN_DIR
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "data" / "garmin.db"
 TOKEN_DIR = DEFAULT_TOKEN_DIR
 DEFAULT_SYNC_WINDOW_DAYS = 35
 
 load_dotenv(PROJECT_ROOT / ".env")
+
+# APP_DB_PATH lets tests and throwaway servers use their own database file.
+DB_PATH = Path(os.environ.get("APP_DB_PATH") or PROJECT_ROOT / "data" / "garmin.db")
 
 APP_USERNAME = os.environ.get("APP_USERNAME")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")

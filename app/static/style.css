@@ -372,3 +372,19 @@ tbody tr:hover{background:var(--surface-2);}
 }
 
 .empty-hint{color:var(--ink-muted); font-size:13px; padding:12px 0;}
+
+/* ---- Plan tab (plans.js) ---- */
+.plan-actions{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
+.plan-actions a{text-decoration:none; display:inline-flex; align-items:center;}
+.plan-actions input[type="text"]{flex:1 1 220px; min-height:36px; border:1px solid var(--border); border-radius:8px; padding:4px 10px; background:var(--surface); color:var(--ink); font:inherit;}
+.plan-pick{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--ink-muted); margin-bottom:12px;}
+.plan-pick select{min-height:36px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); padding:4px 8px; max-width:100%;}
+.plan-pages-panel{padding:12px;}
+.plan-pages{display:flex; flex-direction:column; gap:16px; align-items:center;}
+.plan-page{margin:0; width:100%; max-width:900px;}
+.plan-page img{display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:6px; background:#fff;}
+.plan-page figcaption{font-size:12px; color:var(--ink-muted); text-align:center; margin-top:4px;}
+.plan-upload{display:flex; flex-direction:column; gap:10px; margin-bottom:8px;}
+.plan-upload input[type="text"]{min-height:36px; border:1px solid var(--border); border-radius:8px; padding:4px 10px; background:var(--surface); color:var(--ink); font:inherit;}
+.plan-manage summary{cursor:pointer; font-weight:600;}
+.plan-manage h3{font-size:15px; margin:16px 0 8px;}

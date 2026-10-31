@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import calendar, coach, dashboard, gear, gym, journal, metrics, sailing, sessions, sync, tracks
+from app.api import calendar, coach, dashboard, gear, gym, journal, metrics, plans, sailing, sessions, sync, tracks
 from app.auth import require_auth
 from app.db import get_connection, init_db
 
@@ -42,6 +42,7 @@ app.include_router(gear.router)
 app.include_router(sailing.router)
 app.include_router(sync.router)
 app.include_router(gym.router)
+app.include_router(plans.router)
 
 
 @app.get("/healthz")
@@ -62,6 +63,6 @@ def _versioned(html: str, name: str) -> str:
 @app.get("/")
 def index():
     html = (STATIC_DIR / "index.html").read_text()
-    for name in ("app.js", "style.css", "tracks-core.js", "tracks-detail.js", "tracks.js", "tracks.css", "gym-analysis.js"):
+    for name in ("app.js", "style.css", "tracks-core.js", "tracks-detail.js", "tracks.js", "tracks.css", "gym-analysis.js", "plans.js"):
         html = _versioned(html, name)
     return HTMLResponse(html)

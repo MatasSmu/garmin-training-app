@@ -337,3 +337,16 @@ CREATE TABLE IF NOT EXISTS gym_set_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_gym_sets_session ON gym_set_logs(session_id);
 CREATE INDEX IF NOT EXISTS idx_gym_sets_exercise ON gym_set_logs(exercise_id);
+
+-- ---------------------------------------------------------------------------
+-- Plan tab (app/plans.py): the coach's plan PDFs. Files are stored next to
+-- the database in plans/<sha1>.pdf with page images in plans/<sha1>/.
+CREATE TABLE IF NOT EXISTS plan_documents (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  title        TEXT NOT NULL,
+  file_name    TEXT NOT NULL,
+  sha1         TEXT NOT NULL UNIQUE,
+  pages        INTEGER NOT NULL DEFAULT 0,   -- rendered page images (0 = only the PDF)
+  size_bytes   INTEGER NOT NULL,
+  uploaded_at  TEXT NOT NULL
+);

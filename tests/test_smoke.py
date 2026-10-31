@@ -41,6 +41,9 @@ ROUTES = [
     "/api/gym/locations",
     "/api/gym/exercises",
     "/api/gym/volume",
+    # plan tab
+    "/static/plans.js",
+    "/api/plans",
 ]
 
 
@@ -67,3 +70,6 @@ def test_auth_still_required(base):
 def test_index_has_gym_tab(base):
     html = httpx.get(base + "/", auth=AUTH, timeout=10).text
     assert 'data-tab="gym"' in html and "/static/gym-analysis.js" in html
+    assert 'data-tab="plan"' in html and "/static/plans.js" in html
+    # Plan sits between Journal and Coach
+    assert html.index('data-tab="journal"') < html.index('data-tab="plan"') < html.index('data-tab="coach"')

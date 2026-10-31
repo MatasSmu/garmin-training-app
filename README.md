@@ -30,6 +30,7 @@ service; after pulling code changes run `systemctl --user restart garmin-app`
 | `APP_USERNAME`, `APP_PASSWORD` | yes | Basic-auth login for every page and API call (the app binds to the LAN) |
 | `DEEPSEEK_API_KEY` | no | Enables the LLM coach chat; without it the coach uses fixed templates |
 | `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` | no | Override the coach endpoint / model |
+| `HOME_SPOT` (+ `HOME_SPOT_LAT`, `HOME_SPOT_LON`) | no | Home spot the coach always gets a 5-day wind forecast for (default Kaunas; forecast at the middle of your tracks there) |
 | `SAIL_MATCH_PARTS` | no | Parts that must match for a gear baseline (default `front_wing,sail`) |
 | `DEEPSEEK_PRICE_CACHE_HIT`, `…_CACHE_MISS`, `…_OUTPUT` | no | USD per 1M tokens, only for the cost estimate in the usage log |
 | `PORT`, `HOST` | no | Only read by `start.sh` (defaults 8731 / 0.0.0.0) |

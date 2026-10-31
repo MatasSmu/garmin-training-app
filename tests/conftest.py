@@ -12,6 +12,7 @@ os.environ["APP_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="garmin-tests-")) /
 import pytest  # noqa: E402
 
 from app import config  # noqa: E402
+from app.coach import wind as coach_wind  # noqa: E402
 from app.sailing import deepseek  # noqa: E402
 
 
@@ -23,3 +24,11 @@ def no_real_llm(monkeypatch):
         raise AssertionError("tests must not call DeepSeek")
 
     monkeypatch.setattr(deepseek, "post_chat", refuse)
+
+
+@pytest.fixture(autouse=True)
+def no_real_forecast(monkeypatch):
+    """The coach briefing fetches Open-Meteo forecasts; tests get 'unavailable'
+    unless they install their own fake."""
+    monkeypatch.setattr(coach_wind, "_fetch_forecast", lambda *a, **k: None)
+    monkeypatch.setattr(coach_wind, "_geocode", lambda place: None)

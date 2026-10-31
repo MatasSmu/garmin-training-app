@@ -144,6 +144,9 @@
       tile(TK.kn(s.downwind_vmg_kn), "kn", "Downwind VMG", "at " + TK.num(s.downwind_twa, 0) + "° TWA · " + TK.kn(s.downwind_kn) + " kn"),
       tile(TK.deg(s.wind_deg), "", "Wind (" + s.wind_source + ", " + s.wind_confidence + ")",
         c.wind_kn !== undefined && c.wind_kn !== null ? TK.num(c.wind_kn, 0) + " kn, gusts " + TK.num(c.gust_kn, 0) : "no conditions"),
+      s.wind_suspect ? tile("Doubtful", "", "Wind direction", s.wind_suspect + " — angles and VMG may be wrong; set the wind by hand to fix")
+        : s.wind_steadiness ? tile(TK.STEADY_LABEL[s.wind_steadiness], "", "Wind steadiness",
+          "swung " + s.wind_shift_deg + "° · up to " + s.wind_shift_rate_deg + "° per 4 min") : null,
       A.hr ? tile(TK.num(s.hr_avg, 0), "bpm", "Avg heart rate", "max " + TK.num(s.hr_max, 0)) : null,
     ].forEach(function (t) { if (t) { t.setAttribute("role", "listitem"); wrap.appendChild(t); } });
     return wrap;
@@ -1115,13 +1118,18 @@
       if (!st.eligible) { bp.appendChild(el("p", { class: "tk-msg", text: st.reason })); return; }
       var b = st.baseline;
       var head = "Wind " + TK.num(st.wind_kn, 1) + " kn → band " + TK.bandLabel(st.band) + ". ";
+      var water = b.water === "lake" ? "lake " : b.water === "sea" ? "sea " : "";
+      if (st.best_exclusion) {
+        bp.appendChild(el("div", { class: "tk-warn", role: "status", text: "This session can't set personal bests: " + st.best_exclusion +
+          ". It still counts in your averages." }));
+      }
       if (!b.sessions) {
         bp.appendChild(el("p", { class: "panel-sub", text: head }));
-        bp.appendChild(el("p", { class: "tk-msg", text: "No earlier sessions in this band yet — this one becomes the baseline." }));
+        bp.appendChild(el("p", { class: "tk-msg", text: "No earlier " + water + "sessions in this band yet — this one becomes the baseline." }));
         return;
       }
       var what = b.level === "band+gear" ? "same " + st.match_parts.map(function (k) { return TK.GEAR_LABEL[k].toLowerCase(); }).join(" + ") + " (" + b.gear_label + ")" : "all gear";
-      bp.appendChild(el("p", { class: "panel-sub", text: head + "Compared with " + b.sessions + " earlier session" + (b.sessions === 1 ? "" : "s") +
+      bp.appendChild(el("p", { class: "panel-sub", text: head + "Compared with " + b.sessions + " earlier " + water + "session" + (b.sessions === 1 ? "" : "s") +
         " in this band with " + what + "; averages over the last " + b.rolling_n + "." }));
       if (b.fallback) bp.appendChild(el("div", { class: "tk-warn", role: "status", text: "Band-only baseline: " + b.fallback_reason + "." }));
       var rows = TK.SAIL_METRICS.map(function (m) { return Object.assign({ key: m[0], label: m[1], nd: m[2] }, st.comparison[m[0]]); });
@@ -1131,12 +1139,16 @@
         { key: "rolling_avg", label: "Rolling avg", num: true, sortable: false, fmt: function (r) { return TK.num(r.rolling_avg, r.nd); } },
         { key: "pct_vs_avg", label: "Δ vs avg", num: true, sortable: false, fmt: function (r) {
           if (r.pct_vs_avg === null || r.pct_vs_avg === undefined) return "—";
+          var pct = (r.pct_vs_avg > 0 ? "+" : "") + r.pct_vs_avg.toFixed(1) + " %";
+          if (Math.abs(r.pct_vs_avg) < st.noise_pct) return el("span", { class: "tk-delta", title: "Within ±" + st.noise_pct + " %: noise", text: pct + " ≈" });
           return el("span", { class: "tk-delta " + (r.better === true ? "good" : r.better === false ? "bad" : ""),
-            text: (r.pct_vs_avg > 0 ? "+" : "") + r.pct_vs_avg.toFixed(1) + " %" + (r.better === true ? " ▲" : r.better === false ? " ▼" : "") });
+            text: pct + (r.better === true ? " ▲" : r.better === false ? " ▼" : "") });
         } },
         { key: "best", label: "Best", num: true, sortable: false, fmt: function (r) { return TK.num(r.best, r.nd); } },
       ], rows));
-      bp.appendChild(el("p", { class: "tk-hint", text: "▲ better / ▼ worse than your average; bigger is better for every metric, the upwind angle (degrees from the wind) included. ★ new personal best for this baseline." }));
+      bp.appendChild(el("p", { class: "tk-hint", text: "▲ better / ▼ worse than your average; bigger is better for every metric, the upwind angle (degrees from the wind) included. " +
+        "≈ = within ±" + st.noise_pct + " %, which is noise" + (st.steadiness && st.steadiness !== "steady" ? " in " + TK.STEADY_LABEL[st.steadiness].toLowerCase() + " wind" : "") +
+        ". ★ new personal best for this baseline." }));
     }
 
     function renderAnalysis(st) {

@@ -175,17 +175,22 @@ CREATE TABLE IF NOT EXISTS gear_setup_parts (
 -- ---------------------------------------------------------------------------
 -- iQFOIL analysis (app/sailing). Baselines are derived data, rebuilt from
 -- tracks + track_gear after every change; gear_key '' = band-only baseline.
-CREATE TABLE IF NOT EXISTS sail_baselines (
-  band         TEXT NOT NULL,
-  gear_key     TEXT NOT NULL DEFAULT '',
-  gear_label   TEXT,
-  sessions     INTEGER NOT NULL,
-  rolling_n    INTEGER NOT NULL,
-  enough_data  INTEGER NOT NULL,
-  best_json    TEXT NOT NULL,
-  rolling_json TEXT NOT NULL,
-  updated_at   TEXT NOT NULL,
-  PRIMARY KEY (band, gear_key)
+-- Lake and sea sessions have separate baselines (water). This replaced the
+-- older sail_baselines table (no water column), which older databases still
+-- contain but nothing reads or writes any more.
+CREATE TABLE IF NOT EXISTS sail_baselines_v2 (
+  water               TEXT NOT NULL,          -- lake | sea
+  band                TEXT NOT NULL,
+  gear_key            TEXT NOT NULL DEFAULT '',
+  gear_label          TEXT,
+  sessions            INTEGER NOT NULL,
+  rolling_n           INTEGER NOT NULL,
+  enough_data         INTEGER NOT NULL,
+  excluded_from_bests INTEGER NOT NULL DEFAULT 0, -- very shifty / doubtful-wind sessions
+  best_json           TEXT NOT NULL,
+  rolling_json        TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  PRIMARY KEY (water, band, gear_key)
 );
 
 -- One DeepSeek analysis per session: the exact packet sent and the parsed reply.

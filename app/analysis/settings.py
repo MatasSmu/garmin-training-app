@@ -12,7 +12,7 @@ import copy
 import hashlib
 import json
 
-ENGINE_VERSION = "1.1.2"
+ENGINE_VERSION = "1.2.0"
 
 SPORTS = {
     # key: (label, on-state name, on kn, off kn)

@@ -10,7 +10,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from app.sailing import baselines
-from app.sailing.config import MATCH_PARTS, NOTE_MAX_CHARS, PACKET_MAX_TOKENS, PARTS, SPORTS
+from app.sailing.config import MATCH_PARTS, NOISE_PCT, NOTE_MAX_CHARS, PACKET_MAX_TOKENS, PARTS, SPORTS, water_of
 
 
 class NotEligible(ValueError):
@@ -104,15 +104,23 @@ def gear_info(conn: sqlite3.Connection, track_id: int) -> dict | None:
     return {k: " ".join(v.split()) for k, v in track_gear_map(conn, track_id).items()} or None
 
 
-def wind_info(summary: dict, cond: dict | None) -> dict | None:
+def wind_info(summary: dict, cond: dict | None, spot: str | None = None) -> dict | None:
     """Average wind and band from the conditions; direction from the
-    engine's inference when it has one."""
+    engine's inference when it has one; how steady it was, and how much of a
+    difference is noise because of that."""
     cond = cond or {}
+    steadiness = summary.get("wind_steadiness")
     return drop_none({
         "avg_kn": rnd(cond.get("wind_kn")), "gust_kn": rnd(cond.get("gust_kn")),
         "from_deg": rnd(summary.get("wind_deg") if summary.get("wind_deg") is not None else cond.get("wind_dir"), 0),
         "band_kn": baselines.wind_band(cond.get("wind_kn")),
         "source": None if not cond else "manual" if cond.get("source") == "manual" else "forecast model",
+        "water": water_of(spot),
+        "steadiness": steadiness,
+        "shift_range_deg": summary.get("wind_shift_deg"),
+        "fastest_shift_deg_per_4min": summary.get("wind_shift_rate_deg"),
+        "noise_pct": NOISE_PCT.get(steadiness, NOISE_PCT[None]),
+        "direction_doubtful": summary.get("wind_suspect"),
     }) or None
 
 
@@ -142,7 +150,10 @@ def session_view(conn: sqlite3.Connection, track_id: int, points: list[dict] | N
         return {"eligible": False, "reason": reason, "band": None, "baseline": None, "comparison": None}
     base = baselines.baseline_for(points, point)
     return {"eligible": True, "reason": None, "band": base["band"], "wind_kn": point["wind_kn"],
-            "match_parts": list(MATCH_PARTS), "baseline": base, "comparison": baselines.compare(point, base)}
+            "match_parts": list(MATCH_PARTS), "baseline": base, "comparison": baselines.compare(point, base),
+            "water": point["water"], "steadiness": point["steadiness"], "suspect": point["suspect"],
+            "noise_pct": NOISE_PCT.get(point["steadiness"], NOISE_PCT[None]),
+            "best_exclusion": baselines.best_exclusion(point)}
 
 
 def build(conn: sqlite3.Connection, track_id: int, *, point_of_sail: dict | None = None) -> dict:
@@ -162,15 +173,18 @@ def build(conn: sqlite3.Connection, track_id: int, *, point_of_sail: dict | None
         "date": t["start_date"],
         "spot": t["spot"],
         "session": session_stats(summary),
-        "wind": wind_info(summary, cond),
+        "wind": wind_info(summary, cond, t["spot"]),
         "gear": gear_info(conn, track_id),
         "note": note or None,
         "baseline": drop_none({
+            "water": base["water"],
             "level": base["level"], "gear_matched_on": base["gear_label"] if base["level"] == "band+gear" else None,
             "fallback": base["fallback"], "fallback_reason": base["fallback_reason"],
             "sessions": base["sessions"], "rolling_avg_of_last": base["rolling_n"],
             "best": drop_none(base["best"]), "rolling_avg": drop_none(base["rolling_avg"]),
+            "excluded_from_bests": base["excluded_from_bests"] or None,
         }),
+        "not_a_personal_best_because": view["best_exclusion"],
         "vs_rolling_avg_pct": drop_none({m: c["pct_vs_avg"] for m, c in view["comparison"].items()}),
         "new_personal_bests": [m for m, c in view["comparison"].items() if c["new_best"]],
         "port_vs_starboard": port_starboard(point_of_sail),

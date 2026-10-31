@@ -114,6 +114,16 @@
   // iQFOIL baseline metrics: [key, label, decimals, higher is better]
   TK.SAIL_METRICS = [["vmg_up_kn", "VMG upwind (kn)", 2, true], ["vmg_down_kn", "VMG downwind (kn)", 2, true],
     ["max_kn", "Max speed 2 s (kn)", 1, true], ["angle_up_deg", "Upwind angle (°)", 1, true]];
+  /* Wind steadiness from the engine: how much / how fast the direction moved.
+     Lakes are far shiftier than the sea; doubtful = the direction itself may be wrong. */
+  TK.STEADY_LABEL = { steady: "Steady", shifty: "Shifty", very_shifty: "Very shifty" };
+  TK.windPill = function (r) {
+    if (r.wind_suspect) return el("span", { class: "tk-wind st-doubtful", text: "Doubtful", title: "Wind direction doubtful: " + r.wind_suspect });
+    if (!r.wind_steadiness) return el("span", { class: "tk-wind", text: "—" });
+    return el("span", { class: "tk-wind st-" + r.wind_steadiness, text: TK.STEADY_LABEL[r.wind_steadiness],
+      title: "Wind swung " + r.wind_shift_deg + "°, up to " + r.wind_shift_rate_deg + "° per 4 min" });
+  };
+  TK.WATER_LABEL = { lake: "Lake", sea: "Sea" };
   TK.bandLabel = function (b) { return b ? b.replace("-", "–") + " kn" : "—"; };
   TK.gearText = function (g) { return (TK.GEAR_LABEL[g.kind] || g.kind) + ": " + (g.code || g.name) + (g.code && g.name && g.name !== g.code ? " (" + g.name + ")" : ""); };
 

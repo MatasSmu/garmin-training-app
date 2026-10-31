@@ -41,6 +41,27 @@ def _clean_json(obj):
     return obj
 
 
+# The wind direction comes from the symmetry of port and starboard sailing, so
+# it can't be cross-checked when only one tack was sailed upwind, and an
+# upwind angle inside the no-go zone means it is simply wrong.
+SUSPECT_ONE_TACK_S = (60.0, 300.0)   # one tack under 60 s while the other has over 5 min
+SUSPECT_MIN_UPWIND_TWA = 30.0
+
+
+def wind_suspect(pos: dict) -> str | None:
+    """Why the inferred wind direction is doubtful, or None."""
+    up = pos.get("upwind") or {}
+    p, s = up.get("port") or {}, up.get("starboard") or {}
+    tp, ts = p.get("time_s") or 0.0, s.get("time_s") or 0.0
+    lo, hi = SUSPECT_ONE_TACK_S
+    if min(tp, ts) < lo and max(tp, ts) > hi:
+        return "only one tack sailed upwind, so the wind direction can't be cross-checked"
+    for name, side, t in (("port", p, tp), ("starboard", s, ts)):
+        if t >= lo and side.get("avg_twa") is not None and abs(side["avg_twa"]) < SUSPECT_MIN_UPWIND_TWA:
+            return f"{name} upwind angle {abs(side['avg_twa']):.0f} deg is inside the no-go zone"
+    return None
+
+
 def analyze(track: Track, overrides: dict | None = None, personal_polar: dict | None = None,
             sport: str | None = None) -> dict:
     sport = sport or guess_sport(track.meta.get("sport_name"), track.meta.get("filename"),
@@ -108,6 +129,8 @@ def analyze(track: Track, overrides: dict | None = None, personal_polar: dict | 
         "best_100m_kn": split_by.get("100 m"), "best_500m_kn": split_by.get("500 m"),
         "best_1nm_kn": split_by.get("1 nm"), "best_1h_kn": split_by.get("1 h"),
         "wind_deg": w["deg"], "wind_confidence": w["confidence"], "wind_source": w["source"],
+        "wind_steadiness": w["steadiness"]["label"], "wind_shift_deg": w["steadiness"]["range_deg"],
+        "wind_shift_rate_deg": w["steadiness"]["rate_deg_4min"], "wind_suspect": wind_suspect(pos),
         "tacks": len(tacks), "gybes": len(gybes),
         "tack_success_pct": rate(tacks), "gybe_success_pct": rate(gybes),
         "tack_loss_m": mean_of(tacks, "distance_lost_m"), "gybe_loss_m": mean_of(gybes, "distance_lost_m"),

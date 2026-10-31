@@ -1,8 +1,11 @@
-"""Wind-band baselines: personal bests and rolling averages per wind band
-and per band + gear combo. Pure, deterministic functions over "points"
-(one per session) plus rebuild(), which recomputes the stored table.
+"""Wind-band baselines: personal bests and rolling averages per water type
+(lake / sea) and wind band, and per band + gear combo. Pure, deterministic
+functions over "points" (one per session) plus rebuild(), which recomputes
+the stored table.
 
-A point is {"id", "start_utc", "wind_kn", "gear": {kind: code}, "metrics": {...}}.
+A point is {"id", "start_utc", "wind_kn", "water", "steadiness", "suspect",
+"gear": {kind: code}, "metrics": {...}}. Sessions with very shifty or
+doubtful wind count in the averages but never set a personal best.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from app.sailing.config import MATCH_PARTS, METRICS, MIN_COMBO_SESSIONS, ROLLING_N, SPORTS, WIND_BANDS
+from app.sailing.config import MATCH_PARTS, METRICS, MIN_COMBO_SESSIONS, ROLLING_N, SPORTS, WIND_BANDS, water_of
 from app.sailing.gear import gear_key, gear_label
 
 
@@ -20,6 +23,17 @@ def band_label(lo: float, hi: float | None) -> str:
 
 
 BAND_LABELS = [band_label(lo, hi) for lo, hi in WIND_BANDS]
+WATERS = ("sea", "lake")
+
+
+def best_exclusion(point: dict) -> str | None:
+    """Why a session can't set a personal best (its numbers are too likely
+    to be wind error), or None."""
+    if point.get("suspect"):
+        return "doubtful wind direction: " + point["suspect"]
+    if point.get("steadiness") == "very_shifty":
+        return "very shifty wind"
+    return None
 
 
 def wind_band(wind_kn: float | None, bands=WIND_BANDS) -> str | None:
@@ -49,40 +63,44 @@ def group_stats(points: list[dict], rolling_n: int = ROLLING_N) -> dict:
     rolling_n sessions (a metric a session lacks is skipped, not zero)."""
     pts = sorted(points, key=lambda p: p["start_utc"])
     recent = pts[-rolling_n:]
+    eligible = [p for p in pts if not best_exclusion(p)]
     best, rolling = {}, {}
     for m, (_, higher) in METRICS.items():
-        vals = [p["metrics"][m] for p in pts if p["metrics"].get(m) is not None]
+        vals = [p["metrics"][m] for p in eligible if p["metrics"].get(m) is not None]
         best[m] = (max(vals) if higher else min(vals)) if vals else None
         rv = [p["metrics"][m] for p in recent if p["metrics"].get(m) is not None]
         rolling[m] = round(sum(rv) / len(rv), 2) if rv else None
-    return {"sessions": len(pts), "rolling_n": len(recent), "best": best, "rolling_avg": rolling}
+    return {"sessions": len(pts), "rolling_n": len(recent), "best": best, "rolling_avg": rolling,
+            "excluded_from_bests": len(pts) - len(eligible)}
 
 
-def _in_band(points: list[dict], band: str) -> list[dict]:
-    return [p for p in points if wind_band(p["wind_kn"]) == band]
+def _in_band(points: list[dict], band: str, water: str) -> list[dict]:
+    return [p for p in points if wind_band(p["wind_kn"]) == band and p.get("water", "sea") == water]
 
 
 def compute_all(points: list[dict], parts: tuple[str, ...] | None = None) -> list[dict]:
-    """Every band baseline (gear_key '') and every band + gear combo, in a
-    stable order. Combos below MIN_COMBO_SESSIONS are kept with
+    """Every water + band baseline (gear_key '') and every band + gear combo,
+    in a stable order. Combos below MIN_COMBO_SESSIONS are kept with
     enough_data=False so the gear page can show them growing."""
     parts = parts or MATCH_PARTS
     out = []
-    for band in BAND_LABELS:
-        pts = _in_band(points, band)
-        if not pts:
-            continue
-        out.append({"band": band, "gear_key": "", "gear_label": None, "enough_data": True, **group_stats(pts)})
-        combos: dict[str, list[dict]] = {}
-        for p in pts:
-            k = gear_key(p["gear"], parts)
-            if k:
-                combos.setdefault(k, []).append(p)
-        for k in sorted(combos):
-            grp = combos[k]
-            latest = max(grp, key=lambda p: p["start_utc"])
-            out.append({"band": band, "gear_key": k, "gear_label": gear_label(latest["gear"], parts),
-                        "enough_data": len(grp) >= MIN_COMBO_SESSIONS, **group_stats(grp)})
+    for water in WATERS:
+        for band in BAND_LABELS:
+            pts = _in_band(points, band, water)
+            if not pts:
+                continue
+            out.append({"water": water, "band": band, "gear_key": "", "gear_label": None, "enough_data": True,
+                        **group_stats(pts)})
+            combos: dict[str, list[dict]] = {}
+            for p in pts:
+                k = gear_key(p["gear"], parts)
+                if k:
+                    combos.setdefault(k, []).append(p)
+            for k in sorted(combos):
+                grp = combos[k]
+                latest = max(grp, key=lambda p: p["start_utc"])
+                out.append({"water": water, "band": band, "gear_key": k, "gear_label": gear_label(latest["gear"], parts),
+                            "enough_data": len(grp) >= MIN_COMBO_SESSIONS, **group_stats(grp)})
     return out
 
 
@@ -97,26 +115,29 @@ def baseline_for(points: list[dict], session: dict, parts: tuple[str, ...] | Non
     if band is None:
         return None
     parts = parts or MATCH_PARTS
-    pool = [p for p in _in_band(points, band)
+    water = session.get("water", "sea")
+    pool = [p for p in _in_band(points, band, water)
             if p["id"] != session["id"] and p["start_utc"] < session["start_utc"]]
     key = gear_key(session["gear"], parts)
     combo = [p for p in pool if key and gear_key(p["gear"], parts) == key]
     if key and len(combo) >= MIN_COMBO_SESSIONS:
-        return {"band": band, "level": "band+gear", "gear_key": key, "gear_label": gear_label(session["gear"], parts),
+        return {"water": water, "band": band, "level": "band+gear", "gear_key": key, "gear_label": gear_label(session["gear"], parts),
                 "fallback": False, "fallback_reason": None, "combo_sessions": len(combo), **group_stats(combo)}
     if not key:
         reason = "gear not tagged (" + " + ".join(p.replace("_", " ") for p in parts) + " needed)"
     else:
-        reason = f"only {len(combo)} earlier session(s) with this gear in {band} kn (need {MIN_COMBO_SESSIONS})"
-    return {"band": band, "level": "band", "gear_key": key, "gear_label": gear_label(session["gear"], parts) if key else None,
+        reason = f"only {len(combo)} earlier {water} session(s) with this gear in {band} kn (need {MIN_COMBO_SESSIONS})"
+    return {"water": water, "band": band, "level": "band", "gear_key": key, "gear_label": gear_label(session["gear"], parts) if key else None,
             "fallback": True, "fallback_reason": reason, "combo_sessions": len(combo), **group_stats(pool)}
 
 
 def compare(session: dict, baseline: dict | None) -> dict:
     """Per metric: this session's value, the baseline's rolling average and
     best, the % difference vs the rolling average, whether that difference is
-    an improvement, and whether it's a new personal best."""
+    an improvement, and whether it's a new personal best (never for a session
+    with very shifty or doubtful wind)."""
     out = {}
+    can_best = not best_exclusion(session)
     for m, (_, higher) in METRICS.items():
         v = session["metrics"].get(m)
         avg = baseline["rolling_avg"].get(m) if baseline else None
@@ -125,7 +146,7 @@ def compare(session: dict, baseline: dict | None) -> dict:
         out[m] = {
             "value": v, "rolling_avg": avg, "best": best, "pct_vs_avg": d,
             "better": None if d is None or d == 0 else (d > 0) == higher,
-            "new_best": v is not None and best is not None and (v > best if higher else v < best),
+            "new_best": can_best and v is not None and best is not None and (v > best if higher else v < best),
         }
     return out
 
@@ -135,7 +156,7 @@ def load_points(conn: sqlite3.Connection) -> list[dict]:
     """One point per analysed session of the baseline sports, oldest first."""
     q = ",".join("?" for _ in SPORTS)
     rows = conn.execute(
-        f"SELECT id, start_utc, conditions_json, summary_json FROM tracks "
+        f"SELECT id, start_utc, spot, conditions_json, summary_json FROM tracks "
         f"WHERE sport IN ({q}) AND summary_json IS NOT NULL ORDER BY start_utc", SPORTS).fetchall()
     gear: dict[int, dict[str, str]] = {}
     for g in conn.execute("SELECT tg.track_id, g.kind, g.code, g.name FROM track_gear tg JOIN gear g ON g.id = tg.gear_id"):
@@ -143,8 +164,11 @@ def load_points(conn: sqlite3.Connection) -> list[dict]:
     out = []
     for r in rows:
         cond = json.loads(r["conditions_json"]) if r["conditions_json"] else {}
+        summary = json.loads(r["summary_json"])
         out.append({"id": r["id"], "start_utc": r["start_utc"], "wind_kn": (cond or {}).get("wind_kn"),
-                    "gear": gear.get(r["id"], {}), "metrics": session_metrics(json.loads(r["summary_json"]))})
+                    "water": water_of(r["spot"]), "steadiness": summary.get("wind_steadiness"),
+                    "suspect": summary.get("wind_suspect"),
+                    "gear": gear.get(r["id"], {}), "metrics": session_metrics(summary)})
     return out
 
 
@@ -157,21 +181,23 @@ def rebuild(conn: sqlite3.Connection) -> int:
     summaries) and deterministic, so it simply runs after every change."""
     rows = compute_all(load_points(conn))
     now = datetime.now(timezone.utc).isoformat()
-    conn.execute("DELETE FROM sail_baselines")
+    conn.execute("DELETE FROM sail_baselines_v2")
     for b in rows:
         conn.execute(
-            "INSERT INTO sail_baselines (band, gear_key, gear_label, sessions, rolling_n, enough_data, best_json, "
-            "rolling_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (b["band"], b["gear_key"], b["gear_label"], b["sessions"], b["rolling_n"], int(b["enough_data"]),
-             json.dumps(b["best"]), json.dumps(b["rolling_avg"]), now))
+            "INSERT INTO sail_baselines_v2 (water, band, gear_key, gear_label, sessions, rolling_n, enough_data, "
+            "excluded_from_bests, best_json, rolling_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (b["water"], b["band"], b["gear_key"], b["gear_label"], b["sessions"], b["rolling_n"], int(b["enough_data"]),
+             b["excluded_from_bests"], json.dumps(b["best"]), json.dumps(b["rolling_avg"]), now))
     conn.commit()
     return len(rows)
 
 
 def stored(conn: sqlite3.Connection) -> list[dict]:
     order = {b: i for i, b in enumerate(BAND_LABELS)}
-    rows = [{"band": r["band"], "gear_key": r["gear_key"], "gear_label": r["gear_label"], "sessions": r["sessions"],
-             "rolling_n": r["rolling_n"], "enough_data": bool(r["enough_data"]), "best": json.loads(r["best_json"]),
+    rows = [{"water": r["water"], "band": r["band"], "gear_key": r["gear_key"], "gear_label": r["gear_label"], "sessions": r["sessions"],
+             "rolling_n": r["rolling_n"], "enough_data": bool(r["enough_data"]),
+             "excluded_from_bests": r["excluded_from_bests"], "best": json.loads(r["best_json"]),
              "rolling_avg": json.loads(r["rolling_json"]), "updated_at": r["updated_at"]}
-            for r in conn.execute("SELECT * FROM sail_baselines")]
-    return sorted(rows, key=lambda b: (order.get(b["band"], 99), b["gear_key"]))
+            for r in conn.execute("SELECT * FROM sail_baselines_v2")]
+    return sorted(rows, key=lambda b: (WATERS.index(b["water"]) if b["water"] in WATERS else 9,
+                                       order.get(b["band"], 99), b["gear_key"]))

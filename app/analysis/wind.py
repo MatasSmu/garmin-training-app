@@ -26,6 +26,13 @@ from app.analysis.geo import (
     KN, angdiff, circ_mean, circ_resultant, circular_convolve, gaussian_kernel, runs,
 )
 
+# Wind steadiness, from the auto-tracked shifts (even when a manual direction
+# is set): total swing over the session and the fastest change per 4 minutes.
+# Calibrated on Baltic sea vs Lithuanian lake sessions: Puck is mostly
+# steady/shifty, Kaunas mostly very shifty.
+STEADY_MAX_RANGE_DEG, STEADY_MAX_RATE_DEG = 15.0, 8.0
+VERY_SHIFTY_RANGE_DEG, VERY_SHIFTY_RATE_DEG = 30.0, 13.0
+
 _DEG = np.arange(360, dtype=float)
 _MIRROR = (2 * np.arange(360)[:, None] - np.arange(360)[None, :]) % 360  # [W, theta]
 _NOGO_D = np.abs(angdiff(_DEG[None, :], _DEG[:, None]))                 # [W, theta]
@@ -212,6 +219,25 @@ def rolling(t: np.ndarray, hdg: np.ndarray, w: np.ndarray, W_global: float, cfg:
     return ts, [(W_global + r) % 360.0 for r in ws]
 
 
+def steadiness(ws: list, W_global: float, step_min: float) -> dict:
+    """How much and how fast the tracked wind moved: range (deg), the fastest
+    change between rolling windows scaled to 4 minutes, and a label
+    (steady | shifty | very_shifty; None for sessions too short to tell)."""
+    if len(ws) < 3:
+        return {"range_deg": None, "rate_deg_4min": None, "label": None}
+    rel = angdiff(np.array(ws, dtype=float), W_global)
+    # whole degrees, so the label always agrees with the numbers shown
+    rng = round(float(np.ptp(rel)))
+    rate = round(float(np.max(np.abs(angdiff(np.array(ws[1:]), np.array(ws[:-1]))))) * 4.0 / max(step_min, 0.5))
+    if rng <= STEADY_MAX_RANGE_DEG and rate <= STEADY_MAX_RATE_DEG:
+        label = "steady"
+    elif rng >= VERY_SHIFTY_RANGE_DEG or rate >= VERY_SHIFTY_RATE_DEG:
+        label = "very_shifty"
+    else:
+        label = "shifty"
+    return {"range_deg": rng, "rate_deg_4min": rate, "label": label}
+
+
 def per_point(t: np.ndarray, W_global: float, ts: list, ws: list) -> np.ndarray:
     if len(ts) < 2:
         return np.full(len(t), W_global)
@@ -312,6 +338,7 @@ def estimate(c: Clean, cfg: dict) -> dict:
         pts = np.full(len(c.t), float(prior))
         ts, ws = [], []
     out["auto_deg"] = round(g["deg"], 1)
+    out["steadiness"] = steadiness(ws, g["deg"], cfg["wind_step_min"])
     frames = cfg.get("wind_keyframes") or []
     override = cfg.get("wind_override_deg")
     if len(frames) >= 1:

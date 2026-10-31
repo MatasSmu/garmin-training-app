@@ -211,6 +211,8 @@
           { key: "upwind_vmg_kn", label: "VMG up", num: true, fmt: function (r) { return TK.kn(r.upwind_vmg_kn); } },
           { key: "wind_kn", label: "Wind", num: true, fmt: function (r) {
             return TK.compass(r.wind_deg) + (r.wind_kn === null || r.wind_kn === undefined ? "" : " " + Math.round(r.wind_kn) + "–" + Math.round(r.gust_kn) + " kn"); } },
+          { key: "wind_shift_deg", label: "Wind steadiness", title: "How much the wind direction shifted (lakes shift far more than the sea)",
+            fmt: function (r) { return TK.windPill(r); } },
         ];
         box.appendChild(TK.table(cols, rows, { sortKey: "start_utc", sortDir: -1, maxHeight: "640px", empty: "No sessions match — upload a file above.",
           onRow: function (r) { location.hash = "#track/" + r.id; } }));
@@ -521,11 +523,14 @@
     TK.api("/api/sailing/baselines").then(function (d) {
       bp.appendChild(el("p", { class: "panel-sub", text: "Personal bests and the rolling average of the last " + d.rolling_n +
         " sessions per wind band, and per band + " + d.match_parts.map(function (k) { return TK.GEAR_LABEL[k].toLowerCase(); }).join(" + ") +
-        ". A gear combo is used once it has " + d.min_combo_sessions + " sessions; sessions under " + d.wind_bands[0][0] + " kn are left out." }));
+        ". A gear combo is used once it has " + d.min_combo_sessions + " sessions; sessions under " + d.wind_bands[0][0] + " kn are left out. " +
+        "Lake and sea sessions are kept apart; sessions with very shifty or doubtful wind count in the averages but never set a best." }));
       var cols = [
+        { key: "water", label: "Water", sortable: false, fmt: function (b) { return TK.WATER_LABEL[b.water] || b.water; } },
         { key: "band", label: "Wind", sortable: false, fmt: function (b) { return TK.bandLabel(b.band); } },
         { key: "gear_label", label: "Gear", sortable: false, fmt: function (b) { return b.gear_key ? b.gear_label + (b.enough_data ? "" : " (needs " + d.min_combo_sessions + ")") : "All gear"; } },
-        { key: "sessions", label: "Sessions", num: true, sortable: false },
+        { key: "sessions", label: "Sessions", num: true, sortable: false, fmt: function (b) {
+          return b.sessions + (b.excluded_from_bests ? " (" + b.excluded_from_bests + " not in bests)" : ""); } },
       ];
       TK.SAIL_METRICS.forEach(function (m) {
         cols.push({ key: m[0], label: m[1].replace(" (kn)", "").replace(" (°)", "") + " best / avg", num: true, sortable: false, fmt: function (b) {

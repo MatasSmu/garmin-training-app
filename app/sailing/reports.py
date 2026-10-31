@@ -265,13 +265,14 @@ def coach_session_view(conn: sqlite3.Connection, activity_id: int) -> dict | Non
     stats.update(packet.drop_none({"tack_min_kn": packet.rnd(summary.get("tack_min_kn")),
                                    "gybe_min_kn": packet.rnd(summary.get("gybe_min_kn"))}))
     out = {"track_id": t["id"], "sport": t["sport"], "stats": stats,
-           "wind": packet.wind_info(summary, cond), "gear": packet.gear_info(conn, t["id"]),
+           "wind": packet.wind_info(summary, cond, t["spot"]), "gear": packet.gear_info(conn, t["id"]),
            "port_vs_starboard": packet.port_starboard(pos)}
     view = packet.session_view(conn, t["id"])
     if view["eligible"]:
         base = view["baseline"]
         out["vs_baseline"] = packet.drop_none({
-            "level": base["level"], "fallback_reason": base["fallback_reason"], "earlier_sessions": base["sessions"],
+            "water": base["water"], "level": base["level"], "fallback_reason": base["fallback_reason"],
+            "earlier_sessions": base["sessions"],
             "rolling_avg": packet.drop_none(base["rolling_avg"]), "best": packet.drop_none(base["best"]),
             "pct_vs_rolling_avg": packet.drop_none({m: c["pct_vs_avg"] for m, c in view["comparison"].items()}),
             "new_personal_bests": [m for m, c in view["comparison"].items() if c["new_best"]],

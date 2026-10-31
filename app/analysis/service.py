@@ -407,7 +407,8 @@ def filter_tracks(conn, *, sport=None, spot=None, gear_id=None, wind_min=None, w
 LIST_KEYS = ("duration_s", "distance_m", "max_kn", "best_10s_kn", "best_500m_kn", "best_1nm_kn", "avg_moving_kn",
              "wind_deg", "wind_confidence", "tacks", "gybes", "tack_success_pct", "gybe_success_pct",
              "state_pct", "state_name", "upwind_vmg_kn", "downwind_vmg_kn", "upwind_twa", "downwind_twa",
-             "tack_loss_m", "gybe_loss_m", "hr_avg", "touchdowns")
+             "tack_loss_m", "gybe_loss_m", "hr_avg", "touchdowns", "wind_steadiness", "wind_shift_deg",
+             "wind_shift_rate_deg", "wind_suspect")
 
 
 def list_rows(conn, **filters) -> list[dict]:

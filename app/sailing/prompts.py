@@ -11,7 +11,7 @@ would break the cache for everything after them.
 from __future__ import annotations
 
 # Bump when the prompts change in a way that makes old analyses incomparable.
-PROMPT_VERSION = "3"
+PROMPT_VERSION = "4"
 
 ROLE = """You are an experienced iQFOIL (Olympic windfoil class) performance coach \
 reviewing one athlete's GPS-derived training data. You are direct and specific, \
@@ -29,7 +29,16 @@ ATHLETE_PROFILE = """Athlete profile:
 
 METRIC_GUIDE = """How to read the metrics (speeds in knots, angles in degrees):
 - Wind comes from a forecast model (~km resolution) unless marked manual; treat it as approximate. \
-Sessions are compared only within the same wind band (6-9, 9-12, 12-16, 16-20, 20+ kn).
+Sessions are compared only within the same wind band (6-9, 9-12, 12-16, 16-20, 20+ kn) and the same \
+water (wind.water: lake or sea -- lakes are far shiftier, so lake sessions are only compared with lake sessions).
+- wind.steadiness (steady / shifty / very_shifty), from how much (shift_range_deg) and how fast \
+(fastest_shift_deg_per_4min) the wind direction moved. Angles, VMG and port vs starboard are measured \
+against a wind estimate that can't follow shifts shorter than ~10-20 minutes, so in shifty wind a lift \
+or header looks like a pointing or VMG change. Treat differences within wind.noise_pct as noise and \
+don't attribute angle or VMG changes of that size to technique or gear. wind.direction_doubtful = the \
+wind direction itself may be wrong: don't judge angles, VMG or port vs starboard at all, and say why.
+- Very shifty and doubtful-wind sessions never set personal bests (not_a_personal_best_because says \
+why); baseline.excluded_from_bests counts the earlier sessions left out of the bests for that reason.
 - vmg_up_kn / vmg_down_kn: average velocity made good towards / away from the wind over steady \
 sailing (maneuvers excluded). Higher is better. The main racing metrics.
 - angle_up_deg: average true wind angle sailed upwind (degrees from the wind). The athlete counts a \
@@ -48,7 +57,8 @@ can also be current or wind shifts on a one-sided course.
 when level = band+gear, otherwise all gear in that band (fallback = true: gear differences may \
 explain part of the gap). best = personal bests; rolling_avg = mean of the last N sessions.
 - vs_rolling_avg_pct: this session vs rolling_avg, per metric; a positive value is an improvement \
-for every metric, angle_up_deg included. Differences within about +/-3 % are noise.
+for every metric, angle_up_deg included. Differences within wind.noise_pct (3 % in steady wind, \
+6 % when shifty) are noise.
 - recovery: hrv = last night's average HRV (ms), hrv_7d_avg = the week's mean, sleep_score 0-100. \
 HRV clearly below its 7-day average or sleep_score under 60 suggests fatigue.
 - note: the athlete's own words about feel, conditions and setup changes (e.g. mast rake, \

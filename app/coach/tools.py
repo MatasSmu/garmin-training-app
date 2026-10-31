@@ -119,7 +119,9 @@ TOOL_SPECS = [
                 "speed), upwind/downwind VMG, angles and speeds, % foiling, top speeds, port vs "
                 "starboard, gear, wind band, % vs the athlete's baseline in that wind band and "
                 "the stored coach analysis. Speeds in knots; angle_up_deg is the upwind true wind angle and "
-                "the athlete counts a bigger angle as better. "
+                "the athlete counts a bigger angle as better. gps_analysis.wind says how steady the wind "
+                "was (lakes shift far more than the sea): treat differences within wind.noise_pct as noise, "
+                "and if wind.direction_doubtful is set don't judge angles or VMG. "
                 "Call it only when the athlete wants a specific session analysed."
             ),
             "parameters": {

@@ -159,6 +159,9 @@ def test_analysis_flow(env):
     st = client.get(f"/api/sailing/sessions/{last}").json()
     assert st["baseline"]["level"] == "band+gear" and st["baseline"]["combo_sessions"] == 3
     assert set(st["comparison"]) == {"vmg_up_kn", "vmg_down_kn", "max_kn", "angle_up_deg"}
+    # wind quality for the page: water type, steadiness, the noise threshold that goes with it
+    assert st["water"] == st["baseline"]["water"] and st["water"] in ("lake", "sea")
+    assert st["noise_pct"] == {"steady": 3, "shifty": 6, "very_shifty": 6, None: 3}[st["steadiness"]]
 
     # the packet: compact, no track points
     pk = client.get(f"/api/sailing/sessions/{last}/packet").json()
@@ -168,6 +171,9 @@ def test_analysis_flow(env):
     assert pk["packet"]["gear"] == {"front_wing": "SC 392 899", "sail": "IQ 9.0"}
     assert pk["packet"]["baseline"]["level"] == "band+gear"
     assert "upwind" in pk["packet"]["port_vs_starboard"]
+    wind = pk["packet"]["wind"]
+    assert wind["water"] == st["water"] and wind["noise_pct"] == st["noise_pct"]
+    assert pk["packet"]["baseline"]["water"] == st["water"]
 
     # no key -> 503, nothing stored or logged
     assert client.post(f"/api/sailing/sessions/{last}/analyze").status_code == 503

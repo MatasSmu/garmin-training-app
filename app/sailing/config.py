@@ -35,6 +35,25 @@ MATCH_PARTS: tuple[str, ...] = tuple(
     if p.strip() in PARTS
 ) or ("front_wing", "sail")
 
+# Lake/lagoon spots are only compared with lake spots, sea with sea: inland
+# wind is far shiftier, so mixing them makes either look better or worse than
+# it was. Matched ignoring case against the session's spot name; override
+# with e.g. SAIL_LAKE_SPOTS=kaunas,samylai,teizai,trakai
+LAKE_SPOTS: tuple[str, ...] = tuple(
+    s.strip().lower() for s in os.environ.get("SAIL_LAKE_SPOTS", "kaunas,samylai,teizai").split(",") if s.strip()
+)
+
+
+def water_of(spot: str | None) -> str:
+    """'lake' or 'sea' for a spot name."""
+    name = (spot or "").lower()
+    return "lake" if any(s in name for s in LAKE_SPOTS) else "sea"
+
+
+# Differences vs the rolling average smaller than this (%) are noise, by how
+# steady the wind was (wind_steadiness from the analysis engine).
+NOISE_PCT = {"steady": 3, "shifty": 6, "very_shifty": 6, None: 3}
+
 ROLLING_N = 10           # rolling average over the last N sessions of a group
 MIN_COMBO_SESSIONS = 3   # fewer band + gear sessions -> fall back to the band baseline
 

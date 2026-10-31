@@ -78,7 +78,7 @@ def test_fewer_than_three_combo_sessions_falls_back_to_band():
     b = baseline_for(history, pt(10, 14, gear=WING_A))
     assert b["level"] == "band" and b["fallback"] is True
     assert b["combo_sessions"] == 2 and b["sessions"] == 4
-    assert "only 2 earlier session" in b["fallback_reason"]
+    assert "only 2 earlier sea session" in b["fallback_reason"]
 
 
 def test_untagged_session_falls_back_and_says_why():
@@ -121,3 +121,38 @@ def test_pct_diff_and_metrics_extraction():
 def test_deterministic():
     pts = [pt(i, 6 + i % 15, up=8 + (i % 7) * 0.3, gear=WING_A if i % 2 else WING_B) for i in range(40)]
     assert compute_all(pts) == compute_all(list(reversed(pts)))
+
+
+# ---- lake vs sea, and sessions whose wind is too unreliable for bests
+
+
+def test_water_of_spot():
+    from app.sailing.config import water_of
+
+    assert water_of("Kaunas") == "lake" and water_of("Samylai") == "lake" and water_of("teizai ") == "lake"
+    assert water_of("Puck") == "sea" and water_of("Cadiz") == "sea" and water_of(None) == "sea"
+
+
+def test_lake_and_sea_have_separate_baselines():
+    sea = [dict(pt(i, 13, up=9.0), water="sea") for i in range(1, 4)]
+    lake = [dict(pt(i, 13, up=8.0), water="lake") for i in range(4, 6)]
+    rows = {(b["water"], b["band"], b["gear_key"]): b for b in compute_all(sea + lake)}
+    assert rows[("sea", "12-16", "")]["sessions"] == 3 and rows[("sea", "12-16", "")]["best"]["vmg_up_kn"] == 9.0
+    assert rows[("lake", "12-16", "")]["sessions"] == 2 and rows[("lake", "12-16", "")]["best"]["vmg_up_kn"] == 8.0
+    # a lake session is judged against lake sessions only
+    b = baseline_for(sea + lake, dict(pt(10, 13), water="lake"))
+    assert b["water"] == "lake" and b["sessions"] == 2 and b["rolling_avg"]["vmg_up_kn"] == 8.0
+    assert baseline_for(sea, dict(pt(10, 13), water="lake"))["sessions"] == 0
+
+
+def test_very_shifty_and_doubtful_wind_sessions_never_set_bests():
+    normal = [pt(1, 13, up=9.0), pt(2, 13, up=9.2)]
+    shifty = dict(pt(3, 13, up=11.0), steadiness="very_shifty")
+    doubtful = dict(pt(4, 13, up=12.0), suspect="only one tack sailed upwind")
+    s = group_stats(normal + [shifty, doubtful])
+    assert s["best"]["vmg_up_kn"] == 9.2                                   # not 11 or 12
+    assert s["rolling_avg"]["vmg_up_kn"] == pytest.approx((9.0 + 9.2 + 11.0 + 12.0) / 4)  # still averaged
+    assert s["excluded_from_bests"] == 2
+    base = group_stats(normal)
+    assert compare(dict(pt(10, 13, up=10.0), steadiness="very_shifty"), base)["vmg_up_kn"]["new_best"] is False
+    assert compare(dict(pt(10, 13, up=10.0), steadiness="shifty"), base)["vmg_up_kn"]["new_best"] is True

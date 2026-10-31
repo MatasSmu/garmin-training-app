@@ -80,6 +80,13 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .sess-head{display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap;}
 .sess-head h2{margin:0; font-size:18px;}
 .sess-sub{color:var(--ink-muted); font-size:13px;}
+.fold-row{display:flex; align-items:flex-start; gap:10px;}
+.fold-row .sess-head{flex:1; min-width:0;}
+.fold-btn{
+  flex:none; width:48px; height:48px; border-radius:12px; border:1px solid var(--border);
+  background:var(--surface-2); font-size:28px; font-weight:700; line-height:1; color:var(--teal-strong);
+}
+.card.folded .big-btn{margin-top:8px;}
 .banner{border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:14px; background:var(--accent-soft); color:var(--ink);}
 .banner button{margin-left:6px;}
 .field{display:flex; flex-direction:column; gap:4px; margin-top:10px; font-size:13px; color:var(--ink-muted);}

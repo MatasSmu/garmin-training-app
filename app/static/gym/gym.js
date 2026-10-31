@@ -24,7 +24,7 @@
   var BOOT = null;            // cached /api/gym/bootstrap
   var SESSIONS = [];          // every session stored on this phone
   var LOCS = [];              // locations added on this phone: {id, name, synced}
-  var VIEW = { day: null, finishedId: null, editId: null, addingLoc: false };
+  var VIEW = { day: null, finishedId: null, editId: null, addingLoc: false, folded: false };
   var draft = null;           // not-yet-started session for the selected day
   var sync = { busy: false, error: null, timer: null };
 
@@ -522,15 +522,20 @@
       '<div class="hist-meta garmin-msg" data-msg="' + esc(s.id) + '"></div></div>';
   }
 
+  /* The finished workout with its edit fields. "−" folds it to the summary
+     line (remembered on the phone); a pending Garmin time check stays visible. */
   function finishedCard(s, head) {
     var n = doneSets(s).length;
-    return '<div class="card" id="sessionCard">' + head +
+    var folded = VIEW.folded;
+    var fold = '<button type="button" class="fold-btn" data-act="fold" aria-expanded="' + !folded + '" aria-label="' +
+      (folded ? "Show workout details" : "Hide workout details") + '">' + (folded ? "+" : "−") + "</button>";
+    return '<div class="card' + (folded ? " folded" : "") + '" id="sessionCard"><div class="fold-row">' + head + fold + "</div>" +
       '<p class="sess-sub" data-test="summary">Finished · <b data-test="summary-sets">' + n + (n === 1 ? " set" : " sets") + "</b> · " +
       minutesBetween(s.started_at, s.ended_at) + " min · " + esc(locationName(s.location_id)) + "</p>" +
       garminBox(s) +
-      editFields(s) +
+      (folded ? "" : editFields(s)) +
       '<button type="button" class="big-btn" data-act="new">New workout</button>' +
-      '<button type="button" class="big-btn ghost" data-act="resume">Resume this workout</button></div>';
+      (folded ? "" : '<button type="button" class="big-btn ghost" data-act="resume">Resume this workout</button>') + "</div>";
   }
 
   function exerciseList(s, day, readOnly) {
@@ -622,7 +627,7 @@
       var waiting = s.rev > (s.synced_rev || 0);
       var editing = VIEW.editId === s.id;
       return '<div class="hist-row" data-session="' + esc(s.id) + '"><div><b>' + esc(s.day_code) + "</b> · " + fmtDate(s.started_at) + " " +
-        fmtTime(s.started_at) + '<div class="hist-meta">' + doneSets(s).length + " sets · " + minutesBetween(s.started_at, s.ended_at) + " min · " +
+        fmtTime(s.started_at) + '<div class="hist-meta">' + doneSets(s).length + (doneSets(s).length === 1 ? " set · " : " sets · ") + minutesBetween(s.started_at, s.ended_at) + " min · " +
         esc(locationName(s.location_id)) + "</div></div>" +
         '<span class="tag ' + (waiting ? "wait" : "ok") + '">' + (waiting ? "waiting" : "synced") + "</span>" +
         '<button type="button" class="btn" data-act="edit" data-id="' + esc(s.id) + '">' + (editing ? "Close" : "Edit") + "</button></div>" +
@@ -834,6 +839,12 @@
         break;
       }
       case "cancel-loc": VIEW.addingLoc = false; render(); break;
+      case "fold":
+        VIEW.folded = !VIEW.folded;
+        VIEW.addingLoc = false;
+        idb.put("kv", VIEW.folded, "finishedFolded");
+        render();
+        break;
       case "garmin-use":
       case "garmin-keep": {
         var keep = t.dataset.act === "garmin-keep";
@@ -938,7 +949,9 @@
 
   Promise.all([
     idb.get("kv", "boot"), idb.all("sessions"), idb.all("locations"), idb.get("kv", "finishedId"),
+    idb.get("kv", "finishedFolded"),
   ]).then(function (r) {
+    VIEW.folded = !!r[4];
     BOOT = r[0] || null;
     SESSIONS = (r[1] || []).filter(function (s) { return s.started_at; });
     LOCS = r[2] || [];

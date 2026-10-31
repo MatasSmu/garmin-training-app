@@ -120,8 +120,7 @@ band with the same gear**, and only that compact comparison goes to the model.
   bands 6–9, 9–12, 12–16, 16–20, 20+ kn from the average wind
   (Open-Meteo or your manual entry); sessions under 6 kn or without wind are
   ignored. Per band and per band + front wing + sail: personal bests (VMG
-  up / down, max 2 s speed, best upwind height = 90° − upwind wind angle, so higher = pointing
-  closer to the wind), rolling averages of the last
+  up / down, max 2 s speed, biggest upwind angle), rolling averages of the last
   10 sessions, and counts. A gear combo with fewer than 3 earlier sessions
   falls back to the band baseline and says so. A session is judged only
   against sessions *before* it. The stored table is rebuilt after every

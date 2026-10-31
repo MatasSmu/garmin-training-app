@@ -140,8 +140,7 @@
       tile(TK.num(s.state_pct, 0), "%", D.stateName + " (of moving)", s.touchdowns + " touchdowns · " + s.flights + " flights"),
       tile(String(s.tacks), "", "Tacks", s.tack_success_pct === null ? "" : TK.num(s.tack_success_pct, 0) + "% " + D.stateName.toLowerCase() + " · " + TK.num(s.tack_loss_m, 0) + " m lost"),
       tile(String(s.gybes), "", "Gybes", s.gybe_success_pct === null ? "" : TK.num(s.gybe_success_pct, 0) + "% " + D.stateName.toLowerCase() + " · " + TK.num(s.gybe_loss_m, 0) + " m lost"),
-      tile(TK.kn(s.upwind_vmg_kn), "kn", "Upwind VMG", "height " + TK.num(TK.upwindHeight(s.upwind_twa), 0) + "° (" +
-        TK.num(s.upwind_twa, 0) + "° TWA) · " + TK.kn(s.upwind_kn) + " kn"),
+      tile(TK.kn(s.upwind_vmg_kn), "kn", "Upwind VMG", "at " + TK.num(s.upwind_twa, 0) + "° TWA · " + TK.kn(s.upwind_kn) + " kn"),
       tile(TK.kn(s.downwind_vmg_kn), "kn", "Downwind VMG", "at " + TK.num(s.downwind_twa, 0) + "° TWA · " + TK.kn(s.downwind_kn) + " kn"),
       tile(TK.deg(s.wind_deg), "", "Wind (" + s.wind_source + ", " + s.wind_confidence + ")",
         c.wind_kn !== undefined && c.wind_kn !== null ? TK.num(c.wind_kn, 0) + " kn, gusts " + TK.num(c.gust_kn, 0) : "no conditions"),
@@ -1137,7 +1136,7 @@
         } },
         { key: "best", label: "Best", num: true, sortable: false, fmt: function (r) { return TK.num(r.best, r.nd); } },
       ], rows));
-      bp.appendChild(el("p", { class: "tk-hint", text: "▲ better / ▼ worse than your average; higher is better for every metric. Upwind height = 90° − upwind wind angle (60° TWA → 30°), so higher = pointing closer to the wind. ★ new personal best for this baseline." }));
+      bp.appendChild(el("p", { class: "tk-hint", text: "▲ better / ▼ worse than your average; bigger is better for every metric, the upwind angle (degrees from the wind) included. ★ new personal best for this baseline." }));
     }
 
     function renderAnalysis(st) {

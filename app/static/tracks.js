@@ -226,7 +226,7 @@
     { title: "Velocity made good", unit: " kn", series: [["upwind_vmg_kn", "Upwind VMG", "--series-1"], ["downwind_vmg_kn", "Downwind VMG", "--series-2"]] },
     { title: "Maneuvers completed without touching down", unit: " %", nd: 0, series: [["tack_success_pct", "Tacks", "--series-1"], ["gybe_success_pct", "Gybes", "--series-2"]], yRange: [0, 100] },
     { title: "Distance lost per maneuver", unit: " m", nd: 0, series: [["tack_loss_m", "Tack", "--series-1"], ["gybe_loss_m", "Gybe", "--series-2"]] },
-    { title: "Pointing: upwind height (90° − TWA, higher is better)", unit: "°", nd: 0, series: [["upwind_twa", "Upwind height", "--series-1", TK.upwindHeight]] },
+    { title: "Upwind angle: average upwind TWA (bigger is better)", unit: "°", nd: 0, series: [["upwind_twa", "Upwind TWA", "--series-1"]] },
     { title: "Time foiling / planing (% of moving)", unit: " %", nd: 0, series: [["state_pct", "Foiling / planing", "--series-1"]], yRange: [0, 100] },
   ];
 
@@ -251,8 +251,7 @@
           card.appendChild(cbox);
           box.appendChild(card);
           charts.push(TK.trendChart(cbox, x, tc.series.map(function (s) {
-            var conv = s[3] || function (v) { return v; };  // optional conversion of the field
-            return { label: s[1], color: TK.css(s[2]), unit: tc.unit, nd: tc.nd, data: rows.map(function (r) { return r[s[0]] === undefined || r[s[0]] === null ? null : conv(r[s[0]]); }) };
+            return { label: s[1], color: TK.css(s[2]), unit: tc.unit, nd: tc.nd, data: rows.map(function (r) { return r[s[0]] === undefined ? null : r[s[0]]; }) };
           }), { height: 200, yRange: tc.yRange, onClick: function (i) { location.hash = "#track/" + rows[i].id; } }));
         });
       }).catch(function (e) { box.style.opacity = 1; box.textContent = e.message; });
@@ -618,7 +617,7 @@
     ["Avg moving (kn)", function (c) { return TK.kn(c.summary.avg_moving_kn); }, function (c) { return c.summary.avg_moving_kn; }],
     ["Foiling / planing %", function (c) { return TK.num(c.summary.state_pct, 0); }, function (c) { return c.summary.state_pct; }],
     ["Upwind VMG (kn)", function (c) { return TK.kn(c.summary.upwind_vmg_kn); }, function (c) { return c.summary.upwind_vmg_kn; }],
-    ["Upwind height (90° − TWA)", function (c) { return TK.num(TK.upwindHeight(c.summary.upwind_twa), 0) + "°"; }, function (c) { return TK.upwindHeight(c.summary.upwind_twa); }],
+    ["Upwind TWA", function (c) { return TK.num(c.summary.upwind_twa, 0) + "°"; }, function (c) { return c.summary.upwind_twa; }],
     ["Downwind VMG (kn)", function (c) { return TK.kn(c.summary.downwind_vmg_kn); }, function (c) { return c.summary.downwind_vmg_kn; }],
     ["Tacks (% clean)", function (c) { return c.summary.tacks + " (" + TK.num(c.summary.tack_success_pct, 0) + "%)"; }, function (c) { return c.summary.tack_success_pct; }],
     ["Gybes (% clean)", function (c) { return c.summary.gybes + " (" + TK.num(c.summary.gybe_success_pct, 0) + "%)"; }, function (c) { return c.summary.gybe_success_pct; }],

@@ -5,7 +5,6 @@ packet budget and DeepSeek pricing for the cost log."""
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 
 # Sessions of these sports get gear slots, baselines and DeepSeek analyses.
 SPORTS = ("windfoil",)
@@ -39,23 +38,12 @@ MATCH_PARTS: tuple[str, ...] = tuple(
 ROLLING_N = 10           # rolling average over the last N sessions of a group
 MIN_COMBO_SESSIONS = 3   # fewer band + gear sessions -> fall back to the band baseline
 
-# Upwind pointing is shown as "height": degrees above a beam reach, i.e.
-# 90 minus the average true wind angle sailed upwind (60 deg TWA -> 30 deg).
-# Higher = closer to the wind, like every other metric where higher is better.
-BEAM_REACH_TWA = 90.0
-
-
-def upwind_height(twa: float | None) -> float | None:
-    return None if twa is None else round(BEAM_REACH_TWA - twa, 1)
-
-
-# Metrics compared against baselines:
-# key -> (summary_json field, higher is better, conversion of the field or None)
-METRICS: dict[str, tuple[str, bool, Callable[[float], float] | None]] = {
-    "vmg_up_kn": ("upwind_vmg_kn", True, None),
-    "vmg_down_kn": ("downwind_vmg_kn", True, None),
-    "max_kn": ("max_kn", True, None),
-    "height_up_deg": ("upwind_twa", True, upwind_height),
+# Metrics compared against baselines: key -> (summary_json field, higher is better)
+METRICS: dict[str, tuple[str, bool]] = {
+    "vmg_up_kn": ("upwind_vmg_kn", True),
+    "vmg_down_kn": ("downwind_vmg_kn", True),
+    "max_kn": ("max_kn", True),
+    "angle_up_deg": ("upwind_twa", True),    # athlete's choice: a bigger upwind TWA counts as better
 }
 
 PACKET_MAX_TOKENS = 1500

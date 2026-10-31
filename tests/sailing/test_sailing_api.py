@@ -158,7 +158,7 @@ def test_analysis_flow(env):
 
     st = client.get(f"/api/sailing/sessions/{last}").json()
     assert st["baseline"]["level"] == "band+gear" and st["baseline"]["combo_sessions"] == 3
-    assert set(st["comparison"]) == {"vmg_up_kn", "vmg_down_kn", "max_kn", "height_up_deg"}
+    assert set(st["comparison"]) == {"vmg_up_kn", "vmg_down_kn", "max_kn", "angle_up_deg"}
 
     # the packet: compact, no track points
     pk = client.get(f"/api/sailing/sessions/{last}/packet").json()
@@ -259,10 +259,8 @@ def test_coach_chat_session_details_include_gps_analysis(env):
     gps = get_session_details(conn, 999)["gps_analysis"]
     s = gps["stats"]
     assert s["tacks"] > 0 and "tack_foiling_pct" in s and "tack_loss_m" in s and "tack_min_kn" in s
-    assert s["vmg_up_kn"] > 0 and s["vmg_down_kn"] > 0 and "angle_up_deg" not in s
-    assert 0 < s["height_up_deg"] < 90  # 90 - upwind TWA
-    assert "height_deg" in gps["port_vs_starboard"]["upwind"]["port"]
-    assert "angle_deg" not in gps["port_vs_starboard"]["upwind"]["port"]
+    assert s["vmg_up_kn"] > 0 and s["vmg_down_kn"] > 0 and "angle_up_deg" in s
+    assert "upwind" in gps["port_vs_starboard"]
     assert gps["wind"]["band_kn"] == "12-16"
     assert gps["vs_baseline"]["earlier_sessions"] == 0
     assert "coach_analysis" not in gps

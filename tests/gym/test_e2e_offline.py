@@ -14,25 +14,11 @@ import sqlite3
 import httpx
 import pytest
 
-from tests.live_server import AUTH, live_server
+from tests.live_server import AUTH, PHONE
 
 sync_api = pytest.importorskip("playwright.sync_api")
 
 pytestmark = pytest.mark.e2e
-
-PHONE = {  # roughly a Xiaomi 14T in Chrome
-    "viewport": {"width": 393, "height": 851},
-    "device_scale_factor": 2.75,
-    "is_mobile": True,
-    "has_touch": True,
-}
-
-
-@pytest.fixture()
-def server(tmp_path):
-    db = tmp_path / "e2e.db"
-    with live_server(db) as base:
-        yield base, db
 
 
 def _api(base, path):

@@ -13,6 +13,7 @@ from app.api.deps import get_db
 from app.db import init_db
 from app.gym.plan_import import DEFAULT_PLAN_PATH, import_plan
 from app.main import app
+from tests.live_server import live_server
 
 AUTH = {"Authorization": "Basic " + base64.b64encode(f"{config.APP_USERNAME}:{config.APP_PASSWORD}".encode()).decode()}
 
@@ -42,3 +43,11 @@ def client(conn):
     with TestClient(app, headers=AUTH) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def server(tmp_path):
+    """The real app on a free port with its own throwaway DB: (base_url, db_path)."""
+    db = tmp_path / "e2e.db"
+    with live_server(db) as base:
+        yield base, db

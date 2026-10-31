@@ -5,7 +5,7 @@
    page keeps its own data in IndexedDB. Bump VERSION to drop old caches. */
 "use strict";
 
-var VERSION = "gym-shell-v1";
+var VERSION = "gym-shell-v2";
 var SHELL = [
   "/gym/",
   "/gym/manifest.webmanifest",

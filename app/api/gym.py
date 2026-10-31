@@ -132,6 +132,30 @@ def patch_session(session_id: str, payload: SessionEdit, conn: sqlite3.Connectio
     return store.session_detail(conn, session_id)
 
 
+class GarminTimeChoice(BaseModel):
+    activity_id: int
+
+
+@router.post("/api/gym/sessions/{session_id}/garmin-time")
+def accept_garmin_time(session_id: str, payload: GarminTimeChoice, conn: sqlite3.Connection = Depends(get_db)):
+    """Use the Garmin activity's start/end for this workout (only after the athlete confirmed)."""
+    try:
+        found = store.apply_garmin_time(conn, session_id, payload.activity_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if not found:
+        raise HTTPException(404, "session not found")
+    return store.session_detail(conn, session_id)
+
+
+@router.post("/api/gym/sessions/{session_id}/garmin-time/dismiss")
+def dismiss_garmin_time(session_id: str, payload: GarminTimeChoice, conn: sqlite3.Connection = Depends(get_db)):
+    """Keep the logged times; stop offering this Garmin activity's."""
+    if not store.dismiss_garmin_time(conn, session_id, payload.activity_id):
+        raise HTTPException(404, "session not found")
+    return store.session_detail(conn, session_id)
+
+
 @router.get("/api/gym/locations")
 def get_locations(conn: sqlite3.Connection = Depends(get_db)):
     return store.locations(conn)

@@ -159,6 +159,26 @@ linked to it. The Gym tab then shows that activity's duration and avg / max HR.
 Linking happens on every gym sync and whenever the Gym tab loads, so it also
 works when Garmin syncs later than the phone. Garmin sync itself is unchanged.
 
+### Checking times against the watch
+
+Sometimes the logged times are wrong, for example when you type the workout in
+after the gym. If your watch recorded the workout, the app offers Garmin's times
+instead:
+
+* For an unlinked workout, it uses the nearest Garmin strength activity within 12 h
+  that no other workout uses.
+* For a linked workout, it uses its own activity when start or end differ by more than 2 min.
+
+The choice appears as **Check workout times** at the top of the Gym tab, in the
+workout's detail, and on the phone logger. **Nothing changes until you pick:**
+
+* **Use Garmin time:** start and end become the watch's times, and the workout
+  is linked to that activity. The phone picks up the new times at its next sync.
+* **Keep mine:** your times stay, and that activity isn't offered for this workout again.
+
+Each Garmin activity can belong to only one workout. Applying it needs the laptop
+(the server), so on the phone the buttons work only while it is reachable.
+
 ## 7. Later: moving to the Raspberry Pi
 
 * **Install:** copy the project (`git clone` + `.env`) and the data

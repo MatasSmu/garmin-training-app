@@ -307,13 +307,7 @@
       // The server had a newer copy (edited on the laptop): take its session fields.
       (res.server_copies || []).forEach(function (c) {
         var s = byId(c.id);
-        if (!s) return;
-        ["plan_day_id", "location_id", "started_at", "ended_at", "notes", "updated_at"].forEach(function (k) { s[k] = c[k]; });
-        s.notes = s.notes || "";
-        var d = dayById(s.plan_day_id);
-        if (d) s.day_code = d.code;
-        s.synced_rev = s.rev;
-        writes.push(idb.put("sessions", s));
+        if (s) writes.push(takeServerFields(s, c));
       });
       locs.forEach(function (l) { l.synced = true; writes.push(idb.put("locations", l)); });
       if (BOOT) {
@@ -332,6 +326,36 @@
     });
   }
 
+  /* Session fields (never sets -- those are only logged here) from the
+     server's newer copy, e.g. times confirmed from Garmin on the laptop. */
+  function takeServerFields(s, c) {
+    ["plan_day_id", "location_id", "started_at", "ended_at", "notes", "updated_at"].forEach(function (k) { s[k] = c[k]; });
+    s.notes = s.notes || "";
+    var d = dayById(s.plan_day_id);
+    if (d) s.day_code = d.code;
+    s.synced_rev = s.rev;
+    return idb.put("sessions", s);
+  }
+
+  /* Apply edits made on the server to workouts on this phone that have no
+     unsynced changes of their own (those sync first and get the server copy
+     back if it's newer). Returns true when something changed. */
+  function mergeServerSessions() {
+    var changed = false;
+    ((BOOT && BOOT.sessions) || []).forEach(function (c) {
+      var s = byId(c.id);
+      if (!s || s.rev > (s.synced_rev || 0) || !(c.updated_at > s.updated_at)) return;
+      takeServerFields(s, c);
+      changed = true;
+    });
+    return changed;
+  }
+
+  function garminSuggestion(id) {
+    var c = ((BOOT && BOOT.sessions) || []).find(function (x) { return x.id === id; });
+    return c ? c.garmin_suggestion : null;
+  }
+
   var lastBootAt = 0;
   function refreshBoot(force) {
     if (!force && BOOT && Date.now() - lastBootAt < 120000) return Promise.resolve();
@@ -342,8 +366,9 @@
       sync.error = null;
       // Re-render only when the plan or locations changed: a periodic refresh
       // must not rebuild the page under the athlete's thumb.
-      var changed = !old || JSON.stringify(old.days) !== JSON.stringify(fresh.days) ||
-        JSON.stringify(old.locations) !== JSON.stringify(fresh.locations);
+      var suggestions = function (b) { return JSON.stringify(((b && b.sessions) || []).map(function (x) { return x.garmin_suggestion; })); };
+      var changed = mergeServerSessions() || !old || JSON.stringify(old.days) !== JSON.stringify(fresh.days) ||
+        JSON.stringify(old.locations) !== JSON.stringify(fresh.locations) || suggestions(old) !== suggestions(fresh);
       return idb.put("kv", fresh, "boot").then(function () {
         if (changed && !isTyping()) render();
         else renderSync();
@@ -480,11 +505,29 @@
       '<label class="field">Note<textarea data-act="note" rows="2">' + esc(s.notes) + "</textarea></label>";
   }
 
+  /* Garmin recorded this workout at other times: offer them, change nothing
+     until the athlete picks. Needs the server (the laptop) to apply. */
+  function garminBox(s) {
+    var g = garminSuggestion(s.id);
+    if (!g || s.rev > (s.synced_rev || 0)) return "";
+    var hr = g.avg_hr ? " · HR " + Math.round(g.avg_hr) + (g.max_hr ? " / " + Math.round(g.max_hr) : "") : "";
+    return '<div class="garmin-box" data-test="garmin-box">' +
+      "<b>Check the time</b> — your watch recorded “" + esc(g.name || "Strength") + "” " +
+      fmtTime(g.started_at) + "–" + fmtTime(g.ended_at) + " (" + g.duration_min + " min" + hr + ")." +
+      '<div class="hist-meta">Logged here: ' + fmtTime(s.started_at) + "–" + (s.ended_at ? fmtTime(s.ended_at) : "…") +
+      " (" + (minutesBetween(s.started_at, s.ended_at) || 0) + " min). Nothing changes until you choose.</div>" +
+      '<div class="row" style="margin-top:8px">' +
+      '<button type="button" class="btn primary" data-act="garmin-use" data-id="' + esc(s.id) + '" data-activity="' + g.activity_id + '">Use Garmin time</button>' +
+      '<button type="button" class="btn" data-act="garmin-keep" data-id="' + esc(s.id) + '" data-activity="' + g.activity_id + '">Keep mine</button></div>' +
+      '<div class="hist-meta garmin-msg" data-msg="' + esc(s.id) + '"></div></div>';
+  }
+
   function finishedCard(s, head) {
     var n = doneSets(s).length;
     return '<div class="card" id="sessionCard">' + head +
       '<p class="sess-sub" data-test="summary">Finished · <b data-test="summary-sets">' + n + (n === 1 ? " set" : " sets") + "</b> · " +
       minutesBetween(s.started_at, s.ended_at) + " min · " + esc(locationName(s.location_id)) + "</p>" +
+      garminBox(s) +
       editFields(s) +
       '<button type="button" class="big-btn" data-act="new">New workout</button>' +
       '<button type="button" class="big-btn ghost" data-act="resume">Resume this workout</button></div>';
@@ -583,6 +626,7 @@
         esc(locationName(s.location_id)) + "</div></div>" +
         '<span class="tag ' + (waiting ? "wait" : "ok") + '">' + (waiting ? "waiting" : "synced") + "</span>" +
         '<button type="button" class="btn" data-act="edit" data-id="' + esc(s.id) + '">' + (editing ? "Close" : "Edit") + "</button></div>" +
+        (s.id !== VIEW.finishedId ? garminBox(s) : "") +
         (editing ? '<div class="hist-edit" data-edit="' + esc(s.id) + '">' + editFields(s) + "</div>" : "");
     }).join("") + "</div>";
   }
@@ -790,6 +834,20 @@
         break;
       }
       case "cancel-loc": VIEW.addingLoc = false; render(); break;
+      case "garmin-use":
+      case "garmin-keep": {
+        var keep = t.dataset.act === "garmin-keep";
+        var msg = main.querySelector('[data-msg="' + t.dataset.id + '"]');
+        main.querySelectorAll('[data-act^="garmin-"][data-id="' + t.dataset.id + '"]').forEach(function (b) { b.disabled = true; });
+        api("/api/gym/sessions/" + encodeURIComponent(t.dataset.id) + "/garmin-time" + (keep ? "/dismiss" : ""),
+            { method: "POST", body: { activity_id: +t.dataset.activity } }).then(function () {
+          return refreshBoot(true);
+        }).then(render).catch(function (e) {
+          if (msg) msg.textContent = "Couldn't reach the laptop (" + e.message + ") — try again when connected.";
+          main.querySelectorAll('[data-act^="garmin-"][data-id="' + t.dataset.id + '"]').forEach(function (b) { b.disabled = false; });
+        });
+        break;
+      }
       case "edit": VIEW.editId = VIEW.editId === t.dataset.id ? null : t.dataset.id; VIEW.addingLoc = false; render(); break;
     }
   });
@@ -891,6 +949,7 @@
       VIEW.finishedId = fin.id;
       VIEW.day = fin.day_code;
     }
+    mergeServerSessions();
     render();
     return refreshBoot(true).then(syncNow);
   }).catch(function (e) {

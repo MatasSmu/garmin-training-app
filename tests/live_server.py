@@ -17,6 +17,12 @@ from app import config
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTH = (config.APP_USERNAME, config.APP_PASSWORD)
+PHONE = {  # Playwright context options, roughly a Xiaomi 14T in Chrome
+    "viewport": {"width": 393, "height": 851},
+    "device_scale_factor": 2.75,
+    "is_mobile": True,
+    "has_touch": True,
+}
 
 
 def _free_port() -> int:

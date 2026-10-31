@@ -311,6 +311,7 @@ CREATE TABLE IF NOT EXISTS gym_sessions (
   ended_at            TEXT,
   notes               TEXT,
   garmin_activity_id  INTEGER REFERENCES sessions(activity_id) ON DELETE SET NULL,
+  garmin_time_dismissed INTEGER,              -- Garmin activity whose times the athlete chose not to use
   client_updated_at   TEXT NOT NULL,          -- last-write-wins between phone and laptop edits
   created_at          TEXT NOT NULL,
   updated_at          TEXT NOT NULL

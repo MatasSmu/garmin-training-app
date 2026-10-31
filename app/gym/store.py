@@ -11,6 +11,11 @@ import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
 GARMIN_MATCH_SLACK = timedelta(minutes=30)
+# A workout logged by hand later can be hours off the watch; offer the nearest
+# Garmin strength activity within this window for the athlete to confirm.
+GARMIN_SUGGEST_WINDOW = timedelta(hours=12)
+GARMIN_TIME_TOLERANCE = timedelta(minutes=2)
+PHONE_SESSION_DAYS = 45
 GARMIN_STRENGTH_TYPES = ("strength_training",)
 
 
@@ -128,8 +133,23 @@ def bootstrap(conn: sqlite3.Connection) -> dict:
         "exercises": exercises(conn),
         "locations": locations(conn),
         "last": last_numbers(conn),
+        "sessions": recent_sessions(conn),
         "server_time": _now(),
     }
+
+
+def recent_sessions(conn: sqlite3.Connection, days: int = PHONE_SESSION_DAYS) -> list[dict]:
+    """Session fields (not sets) of recent workouts plus any Garmin time to
+    check, so the phone picks up edits made here and can offer the check."""
+    if link_garmin(conn):
+        conn.commit()
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return [
+        {"id": s["id"], "plan_day_id": s["plan_day_id"], "location_id": s["location_id"],
+         "started_at": s["started_at"], "ended_at": s["ended_at"], "notes": s["notes"],
+         "updated_at": s["client_updated_at"], "garmin_suggestion": garmin_time_suggestion(conn, s)}
+        for s in conn.execute("SELECT * FROM gym_sessions WHERE started_at >= ? ORDER BY started_at", (since,))
+    ]
 
 
 # --------------------------------------------------------------------- sync
@@ -236,6 +256,15 @@ def session_payload(conn: sqlite3.Connection, session_id: str) -> dict | None:
 SESSION_EDITABLE = ("location_id", "started_at", "ended_at", "notes", "plan_day_id")
 
 
+def _bumped(client_updated_at: str) -> dict:
+    """Timestamps for a server-side edit: strictly newer than the copy it
+    replaces (even if the phone's clock runs ahead), so an older phone copy
+    can't overwrite it and the phone takes the server's version instead."""
+    now = _now()
+    bumped = norm_ts_ms((parse_ts(client_updated_at) + timedelta(milliseconds=1)).isoformat())
+    return {"client_updated_at": max(norm_ts_ms(now), bumped), "updated_at": now}
+
+
 def update_session(conn: sqlite3.Connection, session_id: str, fields: dict) -> bool:
     """Edit from the laptop (Gym tab). Bumps client_updated_at so an older phone
     copy syncing later can't overwrite it."""
@@ -252,10 +281,7 @@ def update_session(conn: sqlite3.Connection, session_id: str, fields: dict) -> b
         raise ValueError("unknown location")
     if "plan_day_id" in values and values["plan_day_id"] is not None and not _exists(conn, "gym_plan_days", values["plan_day_id"]):
         raise ValueError("unknown plan day")
-    now = _now()
-    # Strictly newer than the copy it replaces, even if the phone's clock runs ahead.
-    bumped = norm_ts_ms((parse_ts(row["client_updated_at"]) + timedelta(milliseconds=1)).isoformat())
-    values.update({"client_updated_at": max(norm_ts_ms(now), bumped), "updated_at": now})
+    values.update(_bumped(row["client_updated_at"]))
     if {"started_at", "ended_at"} & fields.keys():
         values["garmin_activity_id"] = None  # times moved: match again
     conn.execute(
@@ -273,8 +299,8 @@ def update_session(conn: sqlite3.Connection, session_id: str, fields: dict) -> b
 def _garmin_candidates(conn: sqlite3.Connection, day: date) -> list[dict]:
     placeholders = ", ".join("?" for _ in GARMIN_STRENGTH_TYPES)
     rows = conn.execute(
-        f"""SELECT activity_id, json_extract(raw_json, '$.startTimeGMT') AS start_gmt, start_time_local,
-                   duration_s, avg_hr, max_hr
+        f"""SELECT activity_id, activity_name, json_extract(raw_json, '$.startTimeGMT') AS start_gmt,
+                   start_time_local, duration_s, avg_hr, max_hr
             FROM sessions WHERE activity_type IN ({placeholders}) AND start_date BETWEEN ? AND ?""",
         (*GARMIN_STRENGTH_TYPES, (day - timedelta(days=1)).isoformat(), (day + timedelta(days=1)).isoformat()),
     ).fetchall()
@@ -314,6 +340,77 @@ def link_garmin(conn: sqlite3.Connection) -> int:
             taken.add(best["activity_id"])
             made += 1
     return made
+
+
+def _garmin_activity(conn: sqlite3.Connection, activity_id: int, day: date) -> dict | None:
+    return next((g for g in _garmin_candidates(conn, day) if g["activity_id"] == activity_id), None)
+
+
+def garmin_time_suggestion(conn: sqlite3.Connection, s: sqlite3.Row) -> dict | None:
+    """The Garmin strength activity whose start/end this workout should
+    probably have, for the athlete to confirm -- never applied by itself.
+    Linked workouts are checked against their own activity; unlinked ones
+    (typically logged by hand hours later) against the nearest unclaimed
+    strength activity within 12 h. None when the times already agree or the
+    athlete chose to keep theirs for that activity."""
+    start, end = parse_ts(s["started_at"]), parse_ts(s["ended_at"])
+    if start is None:
+        return None
+    day = start.astimezone().date()
+    if s["garmin_activity_id"]:
+        g = _garmin_activity(conn, s["garmin_activity_id"], day)
+        candidates = [g] if g else []
+    else:
+        taken = {r[0] for r in conn.execute(
+            "SELECT garmin_activity_id FROM gym_sessions WHERE garmin_activity_id IS NOT NULL AND id != ?", (s["id"],))}
+        candidates = [g for g in _garmin_candidates(conn, day)
+                      if g["activity_id"] not in taken and abs(g["start"] - start) <= GARMIN_SUGGEST_WINDOW]
+    candidates = [g for g in candidates if g["activity_id"] != s["garmin_time_dismissed"] and g["duration_s"]]
+    if not candidates:
+        return None
+    g = min(candidates, key=lambda c: abs(c["start"] - start))
+    if (abs(g["start"] - start) <= GARMIN_TIME_TOLERANCE
+            and end is not None and abs(g["end"] - end) <= GARMIN_TIME_TOLERANCE):
+        return None
+    return {
+        "activity_id": g["activity_id"],
+        "name": g["activity_name"],
+        "started_at": g["start"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ended_at": g["end"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "duration_min": round(g["duration_s"] / 60),
+        "avg_hr": g["avg_hr"],
+        "max_hr": g["max_hr"],
+        "linked": bool(s["garmin_activity_id"]),
+    }
+
+
+def apply_garmin_time(conn: sqlite3.Connection, session_id: str, activity_id: int) -> bool:
+    """The athlete confirmed: take the Garmin activity's start/end and link it.
+    It has to be a strength activity within a day of the workout that no other
+    workout is linked to."""
+    s = conn.execute("SELECT * FROM gym_sessions WHERE id = ?", (session_id,)).fetchone()
+    if s is None:
+        return False
+    act = _garmin_activity(conn, activity_id, parse_ts(s["started_at"]).astimezone().date()) if s["started_at"] else None
+    claimed = conn.execute("SELECT 1 FROM gym_sessions WHERE garmin_activity_id = ? AND id != ?",
+                           (activity_id, session_id)).fetchone()
+    if act is None or claimed is not None:
+        raise ValueError("that Garmin activity can't be used for this workout")
+    values = {"started_at": act["start"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "ended_at": act["end"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "garmin_activity_id": activity_id, "garmin_time_dismissed": None,
+              **_bumped(s["client_updated_at"])}
+    conn.execute(f"UPDATE gym_sessions SET {', '.join(f'{k} = ?' for k in values)} WHERE id = ?",
+                 (*values.values(), session_id))
+    conn.commit()
+    return True
+
+
+def dismiss_garmin_time(conn: sqlite3.Connection, session_id: str, activity_id: int) -> bool:
+    """The athlete keeps their own times; don't offer this activity's again."""
+    cur = conn.execute("UPDATE gym_sessions SET garmin_time_dismissed = ? WHERE id = ?", (activity_id, session_id))
+    conn.commit()
+    return cur.rowcount > 0
 
 
 # --------------------------------------------------------------------- analysis
@@ -361,6 +458,7 @@ def _summary(conn: sqlite3.Connection, s: sqlite3.Row, ex: dict, plan) -> dict:
         "reps_target": reps_target,
         "volume_kg": round(sum(_set_volume(x, ex.get(x["exercise_id"], {})) for x in sets)),
         "garmin": None,
+        "garmin_suggestion": garmin_time_suggestion(conn, s),
     }
     if s["garmin_activity_id"]:
         g = conn.execute(

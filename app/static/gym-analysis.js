@@ -49,6 +49,11 @@
       state.exercises = r[2].filter(function (e) { return e.sessions > 0; });
       root.textContent = "";
       root.appendChild(headPanel(r[1]));
+      var checks = state.sessions.filter(function (x) { return x.garmin_suggestion; });
+      if (checks.length) {
+        root.appendChild(TK.panel("Check workout times", "Your watch recorded these workouts at different times than " +
+          "they were logged. Nothing is changed until you choose.", checks.map(function (x) { return garminBox(x, true); })));
+      }
       root.appendChild(historyPanel());
       var detail = el("div", { id: "gymDetail" });
       root.appendChild(detail);
@@ -71,9 +76,44 @@
     return p;
   }
 
+  /* Garmin's start/end for a workout, applied only when the athlete says so. */
+  function garminBox(s, withTitle) {
+    var g = s.garmin_suggestion;
+    var msg = el("span", { class: "tk-msg" });
+    function choose(keep) {
+      buttons.forEach(function (b) { b.disabled = true; });
+      msg.textContent = "Saving…";
+      TK.api("/api/gym/sessions/" + encodeURIComponent(s.id) + "/garmin-time" + (keep ? "/dismiss" : ""),
+             { method: "POST", body: { activity_id: g.activity_id } })
+        .then(function () { state.selected = s.id; load(); })
+        .catch(function (e) {
+          msg.textContent = "Couldn't save: " + e.message;
+          buttons.forEach(function (b) { b.disabled = false; });
+        });
+    }
+    var buttons = [
+      el("button", { type: "button", class: "btn-primary", text: "Use Garmin time", onclick: function () { choose(false); } }),
+      el("button", { type: "button", class: "chat-tool-btn", text: "Keep mine", onclick: function () { choose(true); } }),
+    ];
+    var hr = g.avg_hr ? ", HR " + Math.round(g.avg_hr) + (g.max_hr ? " / " + Math.round(g.max_hr) : "") : "";
+    var mine = s.duration_min != null ? s.duration_min + " min" : "unfinished";
+    return el("div", { class: "gym-garmin" }, [
+      withTitle ? el("b", { text: fmtDate(s.started_at) + " · day " + (s.day_code || "—") + (s.location ? " · " + s.location : "") }) : null,
+      el("div", { class: "gym-garmin-times" }, [
+        el("span", null, ["Logged: ", el("b", { text: fmtClock(s.started_at) + "–" + fmtClock(s.ended_at) }), " (" + mine + ")"]),
+        el("span", null, ["Garmin “" + (g.name || "Strength") + "”: ",
+          el("b", { text: fmtDate(g.started_at) + " " + fmtClock(g.started_at) + "–" + fmtClock(g.ended_at) }),
+          " (" + g.duration_min + " min" + hr + ")"]),
+      ]),
+      el("div", { class: "gym-edit-row" }, buttons.concat([msg])),
+    ]);
+  }
+
   function historyPanel() {
     var cols = [
-      { key: "started_at", label: "Date", fmt: function (r) { return fmtDate(r.started_at) + " " + fmtClock(r.started_at); } },
+      { key: "started_at", label: "Date", fmt: function (r) {
+        return fmtDate(r.started_at) + " " + fmtClock(r.started_at) + (r.garmin_suggestion ? " ⚠ check time" : "");
+      } },
       { key: "day_code", label: "Day" },
       { key: "plan_week", label: "Week", num: true },
       { key: "location", label: "Location" },
@@ -132,6 +172,7 @@
         table,
         el("p", { class: "panel-sub", text: "* = changed from the plan's pre-filled numbers." }),
         s.notes ? el("p", { class: "gym-note", text: "Note: " + s.notes }) : null,
+        s.garmin_suggestion ? garminBox(s, false) : null,
         editForm(s),
       ]));
       box.scrollIntoView({ behavior: "smooth", block: "start" });

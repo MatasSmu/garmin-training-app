@@ -41,6 +41,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(schema_path.read_text())
     _migrate_coach_conversations(conn)
     _migrate_gear(conn)
+    _migrate_gym_sessions(conn)
     conn.commit()
 
 
@@ -68,6 +69,13 @@ def _migrate_coach_conversations(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_coach_messages_conv ON coach_messages(conversation_id, id)"
     )
+
+
+def _migrate_gym_sessions(conn: sqlite3.Connection) -> None:
+    """Gym tables from before the Garmin time check get its column (additive only)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(gym_sessions)")}
+    if "garmin_time_dismissed" not in cols:
+        conn.execute("ALTER TABLE gym_sessions ADD COLUMN garmin_time_dismissed INTEGER")
 
 
 def _migrate_gear(conn: sqlite3.Connection) -> None:

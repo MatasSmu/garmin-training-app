@@ -35,7 +35,11 @@ def wind_band(wind_kn: float | None, bands=WIND_BANDS) -> str | None:
 
 def session_metrics(summary: dict | None) -> dict:
     s = summary or {}
-    return {m: (float(s[field]) if s.get(field) is not None else None) for m, (field, _) in METRICS.items()}
+    out = {}
+    for m, (field, _, convert) in METRICS.items():
+        v = float(s[field]) if s.get(field) is not None else None
+        out[m] = convert(v) if convert and v is not None else v
+    return out
 
 
 def pct_diff(value: float | None, ref: float | None) -> float | None:
@@ -50,7 +54,7 @@ def group_stats(points: list[dict], rolling_n: int = ROLLING_N) -> dict:
     pts = sorted(points, key=lambda p: p["start_utc"])
     recent = pts[-rolling_n:]
     best, rolling = {}, {}
-    for m, (_, higher) in METRICS.items():
+    for m, (_, higher, _) in METRICS.items():
         vals = [p["metrics"][m] for p in pts if p["metrics"].get(m) is not None]
         best[m] = (max(vals) if higher else min(vals)) if vals else None
         rv = [p["metrics"][m] for p in recent if p["metrics"].get(m) is not None]
@@ -117,7 +121,7 @@ def compare(session: dict, baseline: dict | None) -> dict:
     best, the % difference vs the rolling average, whether that difference is
     an improvement, and whether it's a new personal best."""
     out = {}
-    for m, (_, higher) in METRICS.items():
+    for m, (_, higher, _) in METRICS.items():
         v = session["metrics"].get(m)
         avg = baseline["rolling_avg"].get(m) if baseline else None
         best = baseline["best"].get(m) if baseline else None

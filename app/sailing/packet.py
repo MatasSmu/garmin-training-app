@@ -10,7 +10,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from app.sailing import baselines
-from app.sailing.config import MATCH_PARTS, NOTE_MAX_CHARS, PACKET_MAX_TOKENS, PARTS, SPORTS
+from app.sailing.config import MATCH_PARTS, NOTE_MAX_CHARS, PACKET_MAX_TOKENS, PARTS, SPORTS, upwind_height
 
 
 class NotEligible(ValueError):
@@ -43,7 +43,7 @@ def session_stats(s: dict) -> dict:
         "max_kn": rnd(s.get("max_kn")), "best_10s_kn": rnd(s.get("best_10s_kn")),
         "best_500m_kn": rnd(s.get("best_500m_kn")), "avg_moving_kn": rnd(s.get("avg_moving_kn")),
         "vmg_up_kn": rnd(s.get("upwind_vmg_kn"), 2), "vmg_down_kn": rnd(s.get("downwind_vmg_kn"), 2),
-        "angle_up_deg": rnd(s.get("upwind_twa"), 0), "angle_down_deg": rnd(s.get("downwind_twa"), 0),
+        "height_up_deg": rnd(upwind_height(s.get("upwind_twa")), 0), "angle_down_deg": rnd(s.get("downwind_twa"), 0),
         "speed_up_kn": rnd(s.get("upwind_kn")), "speed_down_kn": rnd(s.get("downwind_kn")),
         "tacks": s.get("tacks"), "tack_foiling_pct": rnd(s.get("tack_success_pct"), 0),
         "tack_loss_m": rnd(s.get("tack_loss_m"), 0),
@@ -65,12 +65,16 @@ def port_starboard(pos: dict | None) -> dict | None:
         if (p.get("time_s") or 0) < 30 or (s.get("time_s") or 0) < 30:
             continue
 
+        # Upwind pointing as height (higher = closer to the wind), downwind as the wind angle (higher = deeper).
+        angle_key = "height_deg" if leg == "upwind" else "angle_deg"
+
         def side(b):
+            angle = upwind_height(b.get("avg_twa")) if leg == "upwind" else b.get("avg_twa")
             return drop_none({"vmg_kn": rnd(sign * b["avg_vmg_kn"], 2) if b.get("avg_vmg_kn") is not None else None,
-                               "angle_deg": rnd(b.get("avg_twa"), 0), "speed_kn": rnd(b.get("avg_kn")),
+                               angle_key: rnd(angle, 0), "speed_kn": rnd(b.get("avg_kn")),
                                "foiling_pct": rnd(b.get("state_pct"), 0), "min": rnd(b["time_s"] / 60, 0)})
         ps, ss = side(p), side(s)
-        diff = drop_none({k: rnd(ps[k] - ss[k], 2) for k in ("vmg_kn", "angle_deg", "speed_kn") if k in ps and k in ss})
+        diff = drop_none({k: rnd(ps[k] - ss[k], 2) for k in ("vmg_kn", angle_key, "speed_kn") if k in ps and k in ss})
         out[leg] = {"port": ps, "starboard": ss, "port_minus_starboard": diff}
     return out or None
 

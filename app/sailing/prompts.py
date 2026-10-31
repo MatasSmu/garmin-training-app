@@ -11,7 +11,7 @@ would break the cache for everything after them.
 from __future__ import annotations
 
 # Bump when the prompts change in a way that makes old analyses incomparable.
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 ROLE = """You are an experienced iQFOIL (Olympic windfoil class) performance coach \
 reviewing one athlete's GPS-derived training data. You are direct and specific, \
@@ -32,21 +32,23 @@ METRIC_GUIDE = """How to read the metrics (speeds in knots, angles in degrees):
 Sessions are compared only within the same wind band (6-9, 9-12, 12-16, 16-20, 20+ kn).
 - vmg_up_kn / vmg_down_kn: average velocity made good towards / away from the wind over steady \
 sailing (maneuvers excluded). Higher is better. The main racing metrics.
-- angle_up_deg: average true wind angle sailed upwind. LOWER is better (pointing higher), but only \
-if VMG holds -- pinching lowers speed and often VMG. angle_down_deg: higher = deeper downwind.
-- speed_up_kn / speed_down_kn: boat speed on those legs; compare with the angle to see whether \
-the athlete sailed high-and-slow or low-and-fast.
+- height_up_deg: upwind pointing height = degrees above a beam reach, i.e. 90 minus the average \
+true wind angle sailed upwind (TWA 60 -> height 30). HIGHER is better (pointing closer to the \
+wind), but only if VMG holds -- pinching lowers speed and often VMG. Always talk about upwind \
+pointing as this height, never as a TWA. angle_down_deg: downwind true wind angle, higher = deeper.
+- speed_up_kn / speed_down_kn: boat speed on those legs; compare with the height / angle to see \
+whether the athlete sailed high-and-slow or low-and-fast.
 - max_kn: best 2-second speed. best_500m_kn / avg_moving_kn: sustained speed.
 - foiling_pct: share of moving time on the foil; touchdowns = flights ending while still sailing.
 - tack_foiling_pct / gybe_foiling_pct: share of tacks / gybes completed without touching down; \
 tack_loss_m / gybe_loss_m: metres lost to windward vs sailing straight on (lower is better).
-- port_vs_starboard: same metrics split by tack (port = wind over the left side). Asymmetry beyond \
-~0.3 kn VMG or ~3 degrees usually points to technique on one tack, stance, or rig/foil trim, but \
+- port_vs_starboard: same metrics split by tack (port = wind over the left side; upwind pointing as \
+height_deg). Asymmetry beyond ~0.3 kn VMG or ~3 degrees usually points to technique on one tack, stance, or rig/foil trim, but \
 can also be current or wind shifts on a one-sided course.
 - baseline: the athlete's own history in the same wind band -- with the same front wing and sail \
 when level = band+gear, otherwise all gear in that band (fallback = true: gear differences may \
 explain part of the gap). best = personal bests; rolling_avg = mean of the last N sessions.
-- vs_rolling_avg_pct: this session vs rolling_avg, per metric. For angle_up_deg a NEGATIVE value \
+- vs_rolling_avg_pct: this session vs rolling_avg, per metric; for every metric a positive value \
 is an improvement. Differences within about +/-3 % are noise.
 - recovery: hrv = last night's average HRV (ms), hrv_7d_avg = the week's mean, sleep_score 0-100. \
 HRV clearly below its 7-day average or sleep_score under 60 suggests fatigue.

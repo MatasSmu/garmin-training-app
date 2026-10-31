@@ -118,7 +118,8 @@ TOOL_SPECS = [
                 "gps_analysis: tacks and gybes (count, % completed on the foil, metres lost, min "
                 "speed), upwind/downwind VMG, angles and speeds, % foiling, top speeds, port vs "
                 "starboard, gear, wind band, % vs the athlete's baseline in that wind band and "
-                "the stored coach analysis. Speeds in knots; for angle_up_deg lower is better. "
+                "the stored coach analysis. Speeds in knots; height_up_deg = upwind pointing height (90 minus the "
+                "upwind true wind angle), higher is better -- talk about pointing as this height. "
                 "Call it only when the athlete wants a specific session analysed."
             ),
             "parameters": {

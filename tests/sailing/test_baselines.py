@@ -10,23 +10,24 @@ WING_A = {"front_wing": "SC 392 899", "sail": "IQ 9.0", "board": "B1"}
 WING_B = {"front_wing": "SC 111 222", "sail": "IQ 9.0", "board": "B1"}
 
 
-def pt(i, wind, up=10.0, down=14.0, mx=25.0, angle=55.0, gear=None):
+def pt(i, wind, up=10.0, down=14.0, mx=25.0, height=35.0, gear=None):
     return {"id": i, "start_utc": 1_000_000 + i * 86400, "wind_kn": wind, "gear": gear or {},
-            "metrics": {"vmg_up_kn": up, "vmg_down_kn": down, "max_kn": mx, "angle_up_deg": angle}}
+            "metrics": {"vmg_up_kn": up, "vmg_down_kn": down, "max_kn": mx, "height_up_deg": height}}
 
 
 def test_group_stats_bests_and_counts():
-    pts = [pt(1, 13, up=9.0, mx=26, angle=52), pt(2, 13, up=10.5, mx=24, angle=58), pt(3, 14, up=9.5, mx=27.5, angle=55)]
+    pts = [pt(1, 13, up=9.0, mx=26, height=38), pt(2, 13, up=10.5, mx=24, height=32), pt(3, 14, up=9.5, mx=27.5, height=35)]
     s = group_stats(pts)
     assert s["sessions"] == 3 and s["rolling_n"] == 3
-    assert s["best"] == {"vmg_up_kn": 10.5, "vmg_down_kn": 14.0, "max_kn": 27.5, "angle_up_deg": 52}
+    assert s["best"] == {"vmg_up_kn": 10.5, "vmg_down_kn": 14.0, "max_kn": 27.5, "height_up_deg": 38}
     assert s["rolling_avg"]["vmg_up_kn"] == pytest.approx(9.67, abs=0.01)
-    assert s["rolling_avg"]["angle_up_deg"] == pytest.approx(55.0)
+    assert s["rolling_avg"]["height_up_deg"] == pytest.approx(35.0)
 
 
-def test_best_angle_is_the_lowest():
-    s = group_stats([pt(1, 10, angle=60), pt(2, 10, angle=49.5), pt(3, 10, angle=53)])
-    assert s["best"]["angle_up_deg"] == 49.5
+def test_best_upwind_height_is_the_highest():
+    # height = 90 - upwind TWA: 40.5 deg height (49.5 deg TWA) points closest to the wind
+    s = group_stats([pt(1, 10, height=30), pt(2, 10, height=40.5), pt(3, 10, height=37)])
+    assert s["best"]["height_up_deg"] == 40.5
 
 
 def test_rolling_average_uses_only_the_latest_ten():
@@ -98,12 +99,15 @@ def test_session_below_six_knots_has_no_baseline():
 
 
 def test_compare_pct_direction_and_new_bests():
-    base = group_stats([pt(1, 13, up=10.0, down=14.0, mx=25.0, angle=55.0)])
-    cmp_ = compare(pt(10, 13, up=10.5, down=13.3, mx=26.0, angle=53.0), base)
+    base = group_stats([pt(1, 13, up=10.0, down=14.0, mx=25.0, height=35.0)])
+    cmp_ = compare(pt(10, 13, up=10.5, down=13.3, mx=26.0, height=37.0), base)
     assert cmp_["vmg_up_kn"]["pct_vs_avg"] == 5.0 and cmp_["vmg_up_kn"]["better"] is True
     assert cmp_["vmg_down_kn"]["pct_vs_avg"] == -5.0 and cmp_["vmg_down_kn"]["better"] is False
-    # lower angle = pointing higher = better, although the % is negative
-    assert cmp_["angle_up_deg"]["pct_vs_avg"] == pytest.approx(-3.6) and cmp_["angle_up_deg"]["better"] is True
+    # higher height = pointing closer to the wind = better, like every other metric
+    assert cmp_["height_up_deg"]["pct_vs_avg"] == pytest.approx(5.7) and cmp_["height_up_deg"]["better"] is True
+    assert cmp_["height_up_deg"]["new_best"] is True
+    lower = compare(pt(11, 13, height=33.0), base)["height_up_deg"]
+    assert lower["better"] is False and lower["new_best"] is False
     assert cmp_["max_kn"]["new_best"] is True and cmp_["vmg_down_kn"]["new_best"] is False
     assert compare(pt(10, 13), None)["max_kn"]["pct_vs_avg"] is None
 
@@ -111,7 +115,7 @@ def test_compare_pct_direction_and_new_bests():
 def test_pct_diff_and_metrics_extraction():
     assert pct_diff(11, 10) == 10.0 and pct_diff(None, 10) is None and pct_diff(5, 0) is None
     m = session_metrics({"upwind_vmg_kn": 9.33, "downwind_vmg_kn": 11.98, "max_kn": 25.52, "upwind_twa": 53.1})
-    assert m == {"vmg_up_kn": 9.33, "vmg_down_kn": 11.98, "max_kn": 25.52, "angle_up_deg": 53.1}
+    assert m == {"vmg_up_kn": 9.33, "vmg_down_kn": 11.98, "max_kn": 25.52, "height_up_deg": 36.9}  # 90 - 53.1
     assert session_metrics(None)["max_kn"] is None
 
 

@@ -113,7 +113,10 @@
     sail: "Sail", mast: "Mast", boom: "Boom", fin: "Fin", foil: "Foil", wing: "Wing", kite: "Kite", other: "Other" };
   // iQFOIL baseline metrics: [key, label, decimals, higher is better]
   TK.SAIL_METRICS = [["vmg_up_kn", "VMG upwind (kn)", 2, true], ["vmg_down_kn", "VMG downwind (kn)", 2, true],
-    ["max_kn", "Max speed 2 s (kn)", 1, true], ["angle_up_deg", "Upwind angle (°)", 1, false]];
+    ["max_kn", "Max speed 2 s (kn)", 1, true], ["height_up_deg", "Upwind height (°)", 1, true]];
+  /* Upwind pointing as "height": degrees above a beam reach (90 − upwind TWA),
+     so higher = closer to the wind = better (60° TWA → 30°). */
+  TK.upwindHeight = function (twa) { return twa === null || twa === undefined ? null : 90 - twa; };
   TK.bandLabel = function (b) { return b ? b.replace("-", "–") + " kn" : "—"; };
   TK.gearText = function (g) { return (TK.GEAR_LABEL[g.kind] || g.kind) + ": " + (g.code || g.name) + (g.code && g.name && g.name !== g.code ? " (" + g.name + ")" : ""); };
 

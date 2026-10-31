@@ -168,13 +168,36 @@
         { key: "reps", label: "Reps", num: true, sortable: false, fmt: function (r) { return r.reps_target ? ratio(r.reps, r.reps_target) : r.reps || "—"; } },
         { key: "feel", label: "Feel 1–5", num: true, sortable: false },
       ], rows, { rowClass: function (r) { return r.done < r.planned ? "gym-short" : null; } });
-      box.appendChild(TK.panel("Workout " + fmtDate(s.started_at), stats.join(" · "), [
+      // "−" folds the sets table and edit form away (remembered in this
+      // browser); the title, summary and a pending Garmin time check stay.
+      var body = el("div", { class: "gym-detail-body" }, [
         table,
         el("p", { class: "panel-sub", text: "* = changed from the plan's pre-filled numbers." }),
         s.notes ? el("p", { class: "gym-note", text: "Note: " + s.notes }) : null,
-        s.garmin_suggestion ? garminBox(s, false) : null,
         editForm(s),
-      ]));
+      ]);
+      var fold = el("button", { type: "button", class: "gym-fold", "data-act": "gym-fold" });
+      function setFolded(folded) {
+        body.hidden = folded;
+        fold.textContent = folded ? "+" : "−";
+        fold.setAttribute("aria-expanded", String(!folded));
+        fold.setAttribute("aria-label", folded ? "Show sets and edit" : "Hide sets and edit");
+        fold.title = folded ? "Show sets and edit" : "Hide sets and edit";
+      }
+      fold.addEventListener("click", function () {
+        var folded = !body.hidden;
+        setFolded(folded);
+        try { localStorage.setItem("gymDetailFolded", folded ? "1" : ""); } catch (e) { /* storage blocked: just not remembered */ }
+      });
+      var remembered = false;
+      try { remembered = localStorage.getItem("gymDetailFolded") === "1"; } catch (e) { /* ignore */ }
+      setFolded(remembered);
+      box.appendChild(TK.panel(null, null, [
+        el("div", { class: "gym-detail-head" }, [el("h2", { text: "Workout " + fmtDate(s.started_at) }), fold]),
+        el("p", { class: "panel-sub", text: stats.join(" · ") }),
+        s.garmin_suggestion ? garminBox(s, false) : null,
+        body,
+      ], { id: "gymDetailPanel" }));
       box.scrollIntoView({ behavior: "smooth", block: "start" });
     }).catch(function (e) {
       box.textContent = "";

@@ -60,10 +60,13 @@
       wrap.appendChild(el("p", { class: "tk-msg", text: "Page previews aren't available for this file — use Open PDF." }));
     }
     for (var n = 1; n <= plan.pages; n++) {
+      var src = "/api/plans/" + plan.id + "/pages/" + n + ".png";
+      // Tap a page to open it alone, where it can be zoomed (page 1 is a wide table).
       wrap.appendChild(el("figure", { class: "plan-page" }, [
-        el("img", { src: "/api/plans/" + plan.id + "/pages/" + n + ".png", alt: plan.title + ", page " + n,
-          loading: n <= 2 ? "eager" : "lazy", "data-page": n }),
-        el("figcaption", { text: "Page " + n + " of " + plan.pages }),
+        el("a", { href: src, target: "_blank", rel: "noopener", title: "Open page " + n + " to zoom" }, [
+          el("img", { src: src, alt: plan.title + ", page " + n, loading: n <= 2 ? "eager" : "lazy", "data-page": n }),
+        ]),
+        el("figcaption", { text: "Page " + n + " of " + plan.pages + " · tap to zoom" }),
       ]));
     }
     return el("div", { class: "panel plan-pages-panel" }, [wrap]);

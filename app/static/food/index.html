@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Food &amp; weight</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/food/manifest.webmanifest" crossorigin="use-credentials">
+<meta name="theme-color" content="#0093A8">
+<link rel="stylesheet" href="/static/food/food.css">
+</head>
+<body>
+<header class="fbar">
+  <div class="fbar-row">
+    <h1 id="title">Food</h1>
+    <button type="button" class="sync-pill" id="syncStatus" aria-live="polite">…</button>
+  </div>
+  <nav class="views" id="views" aria-label="View">
+    <button type="button" class="view-tab active" data-view="today">Today</button>
+    <button type="button" class="view-tab" data-view="weight">Weight</button>
+    <button type="button" class="view-tab" data-view="week">Week</button>
+  </nav>
+</header>
+
+<main id="main" class="fmain">
+  <p class="fmsg">Loading…</p>
+</main>
+
+<div class="sheet-back" id="sheetBack" hidden></div>
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></section>
+<div class="toast" id="toast" hidden></div>
+
+<script src="/static/weight-chart.js"></script>
+<script src="/static/food/food.js"></script>
+</body>
+</html>

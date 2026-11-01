@@ -37,3 +37,13 @@ def client(conn):
     with TestClient(app, headers=AUTH) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def server(tmp_path):
+    """The real app on a free port with its own throwaway DB: (base_url, db_path)."""
+    from tests.live_server import live_server
+
+    db = tmp_path / "e2e.db"
+    with live_server(db) as base:
+        yield base, db

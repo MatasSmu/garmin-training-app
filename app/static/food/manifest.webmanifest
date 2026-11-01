@@ -1,0 +1,15 @@
+{
+  "name": "Food & weight",
+  "short_name": "Food",
+  "id": "/food/",
+  "start_url": "/food/",
+  "scope": "/food/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F1F5F6",
+  "theme_color": "#0093A8",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

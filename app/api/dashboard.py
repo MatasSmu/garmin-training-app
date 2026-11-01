@@ -5,6 +5,7 @@ import sqlite3
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_db
+from app.nutrition.store import dashboard_summary as nutrition_summary
 from app.coach.metrics import (
     current_streak,
     days_since_rest,
@@ -25,4 +26,5 @@ def get_summary(conn: sqlite3.Connection = Depends(get_db)):
         "days_since_rest": days_since_rest(conn),
         "current_streak": current_streak(conn),
         "recent_journal": recent_journal(conn, 7),
+        "nutrition": nutrition_summary(conn),
     }

@@ -350,3 +350,83 @@ CREATE TABLE IF NOT EXISTS plan_documents (
   size_bytes   INTEGER NOT NULL,
   uploaded_at  TEXT NOT NULL
 );
+
+-- ---------------------------------------------------------------------------
+-- Weight & nutrition (app/nutrition). Logged on the phone page /food/
+-- (offline first) and synced with client-generated UUIDs, like the gym
+-- tracker; deletes are tombstones (deleted = 1) so re-sending is harmless.
+CREATE TABLE IF NOT EXISTS weight_entries (
+  id                 TEXT PRIMARY KEY,       -- UUID
+  date               TEXT NOT NULL,          -- local date YYYY-MM-DD
+  slot               TEXT NOT NULL CHECK (slot IN ('morning', 'evening')),
+  weight_kg          REAL NOT NULL,
+  note               TEXT,
+  client_updated_at  TEXT NOT NULL,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  UNIQUE (date, slot)
+);
+
+CREATE TABLE IF NOT EXISTS foods (
+  id                 TEXT PRIMARY KEY,       -- UUID
+  name               TEXT NOT NULL,
+  brand              TEXT,
+  kcal_100g          REAL NOT NULL,
+  protein_100g       REAL NOT NULL DEFAULT 0,
+  carbs_100g         REAL,
+  fat_100g           REAL,
+  serving_g          REAL,
+  barcode            TEXT UNIQUE,
+  source             TEXT NOT NULL CHECK (source IN ('manual', 'openfoodfacts', 'estimate')),
+  deleted            INTEGER NOT NULL DEFAULT 0,
+  client_updated_at  TEXT NOT NULL,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS saved_meals (
+  id                 TEXT PRIMARY KEY,       -- UUID
+  name               TEXT NOT NULL,
+  deleted            INTEGER NOT NULL DEFAULT 0,
+  client_updated_at  TEXT NOT NULL,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+
+-- An item is either a food + grams (values follow the food) or a free item
+-- with fixed values (a manual entry or an estimate saved into the meal).
+CREATE TABLE IF NOT EXISTS saved_meal_items (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  saved_meal_id  TEXT NOT NULL REFERENCES saved_meals(id) ON DELETE CASCADE,
+  position       INTEGER NOT NULL,
+  food_id        TEXT REFERENCES foods(id) ON DELETE SET NULL,
+  grams          REAL,
+  description    TEXT,
+  kcal           REAL,
+  protein_g      REAL,
+  carbs_g        REAL,
+  fat_g          REAL
+);
+CREATE INDEX IF NOT EXISTS idx_saved_meal_items_meal ON saved_meal_items(saved_meal_id, position);
+
+CREATE TABLE IF NOT EXISTS food_logs (
+  id                 TEXT PRIMARY KEY,       -- client UUID
+  date               TEXT NOT NULL,          -- local date YYYY-MM-DD
+  time               TEXT,                   -- local HH:MM
+  meal               TEXT NOT NULL CHECK (meal IN ('breakfast', 'lunch', 'dinner', 'snack')),
+  kcal               REAL NOT NULL,
+  protein_g          REAL NOT NULL DEFAULT 0,
+  carbs_g            REAL,
+  fat_g              REAL,
+  food_id            TEXT REFERENCES foods(id) ON DELETE SET NULL,
+  grams              REAL,
+  saved_meal_id      TEXT REFERENCES saved_meals(id) ON DELETE SET NULL,
+  description        TEXT,
+  source             TEXT NOT NULL CHECK (source IN ('food', 'saved_meal', 'manual', 'estimate')),
+  deleted            INTEGER NOT NULL DEFAULT 0,
+  client_updated_at  TEXT NOT NULL,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(date);
+CREATE INDEX IF NOT EXISTS idx_food_logs_food ON food_logs(food_id);

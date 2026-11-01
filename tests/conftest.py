@@ -13,6 +13,7 @@ import pytest  # noqa: E402
 
 from app import config  # noqa: E402
 from app.coach import wind as coach_wind  # noqa: E402
+from app.nutrition import openfoodfacts  # noqa: E402
 from app.sailing import deepseek  # noqa: E402
 
 
@@ -32,3 +33,11 @@ def no_real_forecast(monkeypatch):
     unless they install their own fake."""
     monkeypatch.setattr(coach_wind, "_fetch_forecast", lambda *a, **k: None)
     monkeypatch.setattr(coach_wind, "_geocode", lambda place: None)
+
+
+@pytest.fixture(autouse=True)
+def no_real_openfoodfacts(monkeypatch):
+    def refuse(code):
+        raise AssertionError("tests must not call Open Food Facts")
+
+    monkeypatch.setattr(openfoodfacts, "fetch_product", refuse)

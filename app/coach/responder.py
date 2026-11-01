@@ -266,6 +266,35 @@ def _gym_briefing(gym: dict) -> list[str]:
     return lines
 
 
+def _nutrition_briefing(n: dict) -> list[str]:
+    """Bodyweight trend vs the plan's goal and the last 7 days of eating."""
+    if not n:
+        return []
+    t = n["targets"]
+    lines = []
+    if n.get("trend_kg") is not None:
+        rate = f"{n['rate_kg_week']:+.2f} kg/week" if n.get("rate_kg_week") is not None else "rate n/a (under 7 days)"
+        proj = f", projected to reach {t['goal_weight_kg']} kg on {n['projected_date']}" if n.get("projected_date") else ""
+        lines.append(
+            f"- Bodyweight (morning trend, EMA): {n['trend_kg']} kg on {n['trend_date']}, {rate}; goal "
+            f"{t['goal_weight_kg']} kg by {t['goal_date']} at {t['target_rate_kg_week']:+.2f} kg/week -> "
+            f"{n['status']}{proj}."
+            + (f" Evening is {n['evening_diff_kg']:+.1f} kg vs morning on average." if n.get("evening_diff_kg") else ""))
+    else:
+        lines.append("- Bodyweight: no morning weights logged yet.")
+    days = n.get("last_7_days") or []
+    if days:
+        lines.append(f"- Nutrition last 7 days (targets {t['kcal_min']}-{t['kcal_max']} kcal, {t['protein_g']} g protein; "
+                     "today is partial; 0 = nothing logged):")
+        lines.append("  - " + "; ".join(f"{d['date'][5:]}: {round(d['kcal'])} kcal / {round(d['protein_g'])} g P"
+                                         for d in days))
+    if n.get("expenditure_kcal"):
+        lines.append(f"- Estimated expenditure ~{n['expenditure_kcal']} kcal/day (intake vs trend, rough).")
+    if n.get("advice"):
+        lines.append(f"- Weight-trend advice: {n['advice']}.")
+    return lines
+
+
 def _context_briefing(ctx: dict) -> str:
     """Render the full metrics context as plain-language facts for the
     DeepSeek system prompt."""
@@ -299,6 +328,7 @@ def _context_briefing(ctx: dict) -> str:
         lines.append("- No journal entries in the last 14 days.")
     lines.extend(_sailing_focus_briefing(ctx.get("sailing_focus") or {}))
     lines.extend(_gym_briefing(ctx.get("gym") or {}))
+    lines.extend(_nutrition_briefing(ctx.get("nutrition") or {}))
     if ctx.get("calendar"):
         lines.extend(_calendar_briefing(ctx["calendar"]))
     if ctx.get("wind_briefing"):

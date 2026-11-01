@@ -7,7 +7,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import calendar, coach, dashboard, gear, gym, journal, metrics, plans, sailing, sessions, sync, tracks
+from app.api import (
+    calendar, coach, dashboard, gear, gym, journal, metrics, nutrition, plans, sailing, sessions, sync, tracks,
+)
 from app.auth import require_auth
 from app.db import get_connection, init_db
 
@@ -43,6 +45,7 @@ app.include_router(sailing.router)
 app.include_router(sync.router)
 app.include_router(gym.router)
 app.include_router(plans.router)
+app.include_router(nutrition.router)
 
 
 @app.get("/healthz")

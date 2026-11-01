@@ -36,6 +36,7 @@
     <button class="tab-btn" data-tab="calendar">Calendar</button>
     <button class="tab-btn" data-tab="tracks">Session map</button>
     <button class="tab-btn" data-tab="gym">Gym</button>
+    <button class="tab-btn" data-tab="nutrition">Nutrition</button>
     <button class="tab-btn" data-tab="journal">Journal</button>
     <button class="tab-btn" data-tab="plan">Plan</button>
     <button class="tab-btn" data-tab="coach">Coach</button>
@@ -58,6 +59,14 @@
       <div class="stat-tile">
         <span class="stat-value mono" id="statSleep">—</span>
         <span class="stat-label">Avg sleep, last 7 nights</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-value mono" id="statWeight">—</span>
+        <span class="stat-label" id="statWeightLabel">Trend weight</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-value mono" id="statProtein">—</span>
+        <span class="stat-label" id="statProteinLabel">Protein today</span>
       </div>
     </div>
     <div class="panel">
@@ -94,6 +103,10 @@
 
   <section id="tab-gym" class="tab-section">
     <div id="gymRoot" aria-live="polite"></div>
+  </section>
+
+  <section id="tab-nutrition" class="tab-section">
+    <div id="nutritionRoot" aria-live="polite"></div>
   </section>
 
   <section id="tab-calendar" class="tab-section">
@@ -221,5 +234,7 @@
 <script src="/static/tracks.js"></script>
 <script src="/static/gym-analysis.js"></script>
 <script src="/static/plans.js"></script>
+<script src="/static/weight-chart.js"></script>
+<script src="/static/nutrition.js"></script>
 </body>
 </html>

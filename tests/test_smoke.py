@@ -44,6 +44,22 @@ ROUTES = [
     # plan tab
     "/static/plans.js",
     "/api/plans",
+    # weight & nutrition
+    "/food/",
+    "/food/sw.js",
+    "/food/manifest.webmanifest",
+    "/static/food/food.js",
+    "/static/food/food.css",
+    "/static/weight-chart.js",
+    "/static/nutrition.js",
+    "/api/nutrition/bootstrap",
+    "/api/nutrition/summary",
+    "/api/nutrition/targets",
+    "/api/nutrition/weights",
+    "/api/nutrition/weight",
+    "/api/nutrition/foods",
+    "/api/nutrition/saved-meals",
+    "/api/nutrition/day/2026-11-01",
 ]
 
 
@@ -63,6 +79,8 @@ def test_auth_still_required(base):
     assert httpx.get(base + "/", timeout=10).status_code == 401
     assert httpx.get(base + "/api/gym/bootstrap", timeout=10).status_code == 401
     assert httpx.get(base + "/gym-login", timeout=10).status_code == 401
+    assert httpx.get(base + "/food/", timeout=10).status_code == 401
+    assert httpx.get(base + "/api/nutrition/bootstrap", timeout=10).status_code == 401
     r = httpx.get(base + "/gym-login", auth=AUTH, timeout=10, follow_redirects=False)
     assert (r.status_code, r.headers["location"]) == (307, "/gym/")
 
@@ -73,3 +91,12 @@ def test_index_has_gym_tab(base):
     assert 'data-tab="plan"' in html and "/static/plans.js" in html
     # Plan sits between Journal and Coach
     assert html.index('data-tab="journal"') < html.index('data-tab="plan"') < html.index('data-tab="coach"')
+
+
+def test_index_has_nutrition_tab_and_dashboard_tiles(base):
+    html = httpx.get(base + "/", auth=AUTH, timeout=10).text
+    assert 'data-tab="nutrition"' in html and "/static/nutrition.js" in html and "/static/weight-chart.js" in html
+    assert html.index('data-tab="gym"') < html.index('data-tab="nutrition"') < html.index('data-tab="journal"')
+    assert 'id="statWeight"' in html and 'id="statProtein"' in html
+    summary = httpx.get(base + "/api/dashboard/summary", auth=AUTH, timeout=10).json()
+    assert summary["nutrition"]["protein_target_g"] == 160

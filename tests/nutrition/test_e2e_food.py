@@ -136,3 +136,35 @@ def test_weights_food_and_offline_sync(server):
     assert conn.execute("SELECT COUNT(DISTINCT id) FROM food_logs WHERE description = 'Chicken & rice'").fetchone()[0] == 2
     assert conn.execute("SELECT COUNT(*) FROM weight_entries").fetchone()[0] == 12
     conn.close()
+
+
+def test_nutrition_tab_shows_trend_and_dashboard_tiles(server):
+    base, _db = server
+    today = date.today()
+    entries = [{"date": (today - timedelta(days=20 - i)).isoformat(), "slot": "morning", "weight_kg": 81 + 0.08 * i}
+               for i in range(20)]
+    _api(base, "/api/nutrition/weights", "PUT", {"entries": entries})
+    _api(base, "/api/nutrition/sync", "POST", {"logs": [
+        {"id": "x1", "date": today.isoformat(), "time": "08:00", "kcal": 900, "protein_g": 55,
+         "description": "Breakfast", "source": "manual", "updated_at": "2026-11-01T08:00:00Z"}]})
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"Chromium for Playwright not available: {e}")
+        ctx = browser.new_context(viewport={"width": 1280, "height": 900},
+                                  http_credentials={"username": AUTH[0], "password": AUTH[1]})
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(base + "/")
+        page.wait_for_function("document.getElementById('statWeight').textContent.indexOf('kg') > 0")
+        assert page.inner_text("#statProtein") == "55 / 160 g"
+        page.click('.tab-btn[data-tab="nutrition"]')
+        page.wait_for_selector('[data-test="nut-trend"]')
+        assert page.inner_text('[data-test="nut-trend"]').endswith(" kg")
+        assert page.inner_text('[data-test="nut-status"]') in {"On track", "Too slow", "Too fast"}
+        assert page.locator("#tab-nutrition svg.wc circle.wc-m").count() == 20
+        assert page.inner_text('[data-test="nut-advice"]').startswith("Gaining")
+        assert not errors, errors
+        browser.close()

@@ -52,6 +52,14 @@
         var sleep = d.sleep_trend.avg_sleep_h;
         document.getElementById("statSleep").textContent = sleep != null ? sleep.toFixed(1) + "h" : "—";
         renderJournalList(document.getElementById("dashboardJournal"), d.recent_journal);
+        var n = d.nutrition;
+        if (n) {
+          document.getElementById("statWeight").textContent = n.trend_kg != null ? n.trend_kg.toFixed(1) + " kg" : "—";
+          document.getElementById("statWeightLabel").textContent = "Trend weight" +
+            (n.rate_kg_week != null ? " · " + (n.rate_kg_week >= 0 ? "+" : "") + n.rate_kg_week.toFixed(2) + " kg/wk, " + n.status_label.toLowerCase() : "");
+          document.getElementById("statProtein").textContent = Math.round(n.protein_today_g) + (n.protein_target_g ? " / " + n.protein_target_g + " g" : " g");
+          document.getElementById("statProteinLabel").textContent = "Protein today · " + Math.round(n.kcal_today) + " kcal";
+        }
       });
   }
 

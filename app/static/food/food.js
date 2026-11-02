@@ -824,16 +824,19 @@
       }
     } else if (s.type === "manual") {
       h.push(head("Manual entry"));
-      // The numbers can be for what was eaten, or per 100 g (from a label) -- then the grams give the total.
+      // The athlete's way: macros per 100 g (from a label), then how much was eaten -> the totals.
+      // "For what I ate" is there for already-known totals; the last choice is remembered.
+      var per100 = manualBasis() === "per100";
       h.push('<label class="field">What<input name="name" autocomplete="off" autofocus></label>' +
-        '<label class="field">How much (g)<input name="grams" inputmode="decimal" autocomplete="off" placeholder="weight in grams (optional)"></label>' +
         '<div class="basis" role="radiogroup" aria-label="The numbers are">' +
-        '<label><input type="radio" name="basis" value="total" checked><span>For what I ate</span></label>' +
-        '<label><input type="radio" name="basis" value="per100"><span>Per 100 g</span></label></div>' +
+        '<label><input type="radio" name="basis" value="per100"' + (per100 ? " checked" : "") + "><span>Per 100 g</span></label>" +
+        '<label><input type="radio" name="basis" value="total"' + (per100 ? "" : " checked") + "><span>For what I ate</span></label></div>" +
         '<div class="row"><label class="field">kcal<input name="kcal" inputmode="decimal"></label>' +
         '<label class="field">Protein g<input name="protein" inputmode="decimal"></label></div>' +
         '<div class="row"><label class="field">Carbs g (optional)<input name="carbs" inputmode="decimal"></label>' +
         '<label class="field">Fat g (optional)<input name="fat" inputmode="decimal"></label></div>' +
+        '<label class="field" id="gramsField">' + (per100 ? "How much did you eat? (g)" : "How much (g, optional)") +
+        '<input name="grams" inputmode="decimal" autocomplete="off" placeholder="weight in grams"></label>' +
         '<p class="pick-total" id="manualCalc" data-test="manual-total" hidden></p>' + mealSelect(defaultMeal(nowHHMM())));
       if (s.error) h.push('<p class="err">' + esc(s.error) + "</p>");
       h.push('<button type="button" class="big-btn" data-act="manual-save">Add</button>');
@@ -1275,9 +1278,15 @@
     }
     return Object.assign({ per100: per100, grams: g }, typed);
   }
+  function manualBasis() {
+    try { return localStorage.getItem("food-manual-basis") || "per100"; } catch (err) { return "per100"; }
+  }
   function updateManualCalc() {
     var out = document.getElementById("manualCalc");
     if (!out) return;
+    var basisEl = sheetEl.querySelector('[name="basis"]:checked');
+    var gf = document.getElementById("gramsField");
+    if (gf && gf.firstChild) gf.firstChild.textContent = basisEl && basisEl.value === "per100" ? "How much did you eat? (g)" : "How much (g, optional)";
     var mv = manualValues(), k = mv.kcal;
     if (k === null || isNaN(k) || !mv.grams) { out.hidden = true; return; }
     out.hidden = false;
@@ -1294,7 +1303,10 @@
     if (el) el.value = v == null ? "" : nd ? r1(v) : r0(v);
   }
   sheetEl.addEventListener("change", function (e) {
-    if (e.target.name === "basis" && SHEET && SHEET.type === "manual") updateManualCalc();
+    if (e.target.name === "basis" && SHEET && SHEET.type === "manual") {
+      try { localStorage.setItem("food-manual-basis", e.target.value); } catch (err) { /* private mode */ }
+      updateManualCalc();
+    }
   });
   sheetEl.addEventListener("input", function (e) {
     if (SHEET && SHEET.type === "manual") { updateManualCalc(); return; }

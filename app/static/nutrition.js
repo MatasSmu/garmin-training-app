@@ -180,7 +180,8 @@
         return k + " = “" + last.columns[k] + "”"; }).join(", ") + "." }));
     }
     return TK.panel("Google Sheet import", "Reads date, time, weight, morning score and note from your private sheet" +
-      (st.interval_minutes > 0 ? ", automatically every " + st.interval_minutes + " min" : "") +
+      (st.import_times && st.import_times.length ? ", automatically at " + st.import_times.join(" and ") +
+        " (catches up if the laptop was off)" : "") +
       ". New and changed rows are added; nothing in the app is deleted.", kids, { "data-test": "sheet-panel" });
   }
 

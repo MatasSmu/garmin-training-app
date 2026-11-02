@@ -10,7 +10,7 @@ from pathlib import Path
 _TMP = Path(tempfile.mkdtemp(prefix="garmin-tests-"))
 os.environ["APP_DB_PATH"] = str(_TMP / "app.db")
 # No Google Sheet auto-import thread, and never the real service-account key.
-os.environ["SHEETS_IMPORT_MINUTES"] = "0"
+os.environ["SHEETS_IMPORT_TIMES"] = ""
 os.environ["GOOGLE_SERVICE_ACCOUNT_FILE"] = str(_TMP / "no-google-key.json")
 
 import pytest  # noqa: E402

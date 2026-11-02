@@ -195,6 +195,25 @@ def test_after_midnight_is_previous_evening_and_second_morning_is_evening():
     assert [(s["row"], s["reason"]) for s in skipped] == [(7, "two evening weigh-ins on 2026-09-27; kept row 8")]
 
 
+def test_auto_import_twice_a_day_with_catch_up_and_retry():
+    from datetime import datetime, timedelta, timezone
+
+    tz = timezone(timedelta(hours=2))
+    at = lambda d, hm: datetime.fromisoformat(f"2026-11-{d}T{hm}:00").replace(tzinfo=tz)  # noqa: E731
+    times = ["10:00", "23:30"]
+    assert sheets.last_slot(at("03", "09:59"), times) == at("02", "23:30")
+    assert sheets.last_slot(at("03", "10:00"), times) == at("03", "10:00")
+    ok = at("03", "10:01")
+    assert not sheets.is_due(at("03", "15:00"), ok, ok, times)          # done this morning
+    assert sheets.is_due(at("03", "23:31"), ok, ok, times)              # evening slot passed
+    assert sheets.is_due(at("04", "08:00"), ok, ok, times)              # laptop was off at 23:30: catch up
+    # A failed attempt (offline) retries after 30 min, not every 5.
+    assert not sheets.is_due(at("03", "23:50"), ok, at("03", "23:31"), times)
+    assert sheets.is_due(at("04", "00:02"), ok, at("03", "23:31"), times)
+    assert sheets.is_due(at("03", "12:00"), None, None, times)          # never imported
+    assert not sheets.is_due(at("03", "12:00"), None, None, [])         # disabled
+
+
 # The athlete's real layout: weight, date, time, score, note -- no header row.
 REAL_ROWS = [
     ["80.4", "2026-09-04", "22:40", "", "(ryte atsisėdimai)"],

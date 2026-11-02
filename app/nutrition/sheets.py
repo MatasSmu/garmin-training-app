@@ -11,7 +11,8 @@ rows within a day.
 Import only adds and updates, never deletes. Each date + slot remembers a
 hash of the sheet row it last imported, so an unchanged sheet row never
 overwrites an edit made in the app; changing the row in the sheet does.
-An auto-import thread runs every SHEETS_IMPORT_MINUTES (default 15).
+The automatic import runs twice a day, at SHEETS_IMPORT_TIMES (default
+10:00 and 23:30 local), catching up when the laptop was off or asleep.
 """
 
 from __future__ import annotations
@@ -36,7 +37,12 @@ from app.nutrition import store
 log = logging.getLogger(__name__)
 
 KEY_PATH = Path(os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE") or PROJECT_ROOT / "data" / "google-service-account.json")
-INTERVAL_MINUTES = float(os.environ.get("SHEETS_IMPORT_MINUTES", "15"))
+# Local times of the automatic import (after the morning and the evening
+# weigh-in); empty disables it. "Import now" in the Nutrition tab works any time.
+IMPORT_TIMES = [t.strip() for t in os.environ.get("SHEETS_IMPORT_TIMES", "10:00,23:30").split(",")
+                if re.fullmatch(r"\d{1,2}:\d{2}", t.strip())]
+RETRY_MINUTES = 30
+CHECK_EVERY_S = 300
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 API = "https://sheets.googleapis.com/v4/spreadsheets"
 MORNING_BEFORE_HOUR = 14
@@ -105,7 +111,7 @@ def status(conn: sqlite3.Connection) -> dict:
         "sheet_url": cfg.get("url"),
         "tab": cfg.get("tab"),
         "configured": bool(cfg.get("id")),
-        "interval_minutes": INTERVAL_MINUTES,
+        "import_times": IMPORT_TIMES,
         "running": _lock.locked(),
         "last": get_setting(conn, "sheet_last_import"),
     }
@@ -473,7 +479,36 @@ def run_import(conn: sqlite3.Connection, source: str = "manual") -> dict:
     result.update(source=source, finished_at=datetime.now(timezone.utc).isoformat(),
                   seconds=round((datetime.now(timezone.utc) - started).total_seconds(), 1))
     set_setting(conn, "sheet_last_import", result)
+    if result["ok"]:
+        set_setting(conn, "sheet_last_ok_at", result["finished_at"])
     return result
+
+
+def last_slot(now: datetime, times: list[str] = IMPORT_TIMES) -> datetime | None:
+    """The most recent scheduled import time at or before now (local, aware)."""
+    best = None
+    for day in (now.date(), now.date() - timedelta(days=1)):
+        for t in times:
+            h, m = map(int, t.split(":"))
+            at = datetime.combine(day, datetime.min.time(), now.tzinfo).replace(hour=h, minute=m)
+            if at <= now and (best is None or at > best):
+                best = at
+    return best
+
+
+def is_due(now: datetime, last_ok: datetime | None, last_attempt: datetime | None,
+           times: list[str] = IMPORT_TIMES) -> bool:
+    """Due when a scheduled time has passed since the last successful import
+    (also catches up after the laptop was off or asleep); after a failure,
+    try again at most every RETRY_MINUTES."""
+    slot = last_slot(now, times)
+    if slot is None or (last_ok is not None and last_ok >= slot):
+        return False
+    return last_attempt is None or now - last_attempt >= timedelta(minutes=RETRY_MINUTES)
+
+
+def _ts(v) -> datetime | None:
+    return datetime.fromisoformat(v).astimezone() if v else None
 
 
 def _loop(stop: threading.Event) -> None:
@@ -485,18 +520,21 @@ def _loop(stop: threading.Event) -> None:
         try:
             conn = get_connection()
             try:
-                if (get_setting(conn, "sheet") or {}).get("id") and KEY_PATH.exists():
+                last = get_setting(conn, "sheet_last_import") or {}
+                if ((get_setting(conn, "sheet") or {}).get("id") and KEY_PATH.exists()
+                        and is_due(datetime.now().astimezone(), _ts(get_setting(conn, "sheet_last_ok_at")),
+                                   _ts(last.get("finished_at")))):
                     run_import(conn, source="auto")
             finally:
                 conn.close()
         except Exception:  # noqa: BLE001 -- the loop must survive anything
             log.exception("Sheet auto-import tick failed")
-        if stop.wait(INTERVAL_MINUTES * 60):
+        if stop.wait(CHECK_EVERY_S):
             return
 
 
 def start_auto_import() -> threading.Event | None:
-    if INTERVAL_MINUTES <= 0:
+    if not IMPORT_TIMES:
         return None
     stop = threading.Event()
     threading.Thread(target=_loop, args=(stop,), name="sheet-import", daemon=True).start()

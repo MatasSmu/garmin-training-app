@@ -74,19 +74,20 @@ def index():
     for name in ("app.js", "style.css", "tracks-core.js", "tracks-detail.js", "tracks.js", "tracks.css", "gym-analysis.js", "plans.js",
                  "weight-chart.js", "nutrition.js"):
         html = _versioned(html, name)
-    photo = config.BACKGROUND_PHOTO
+    photo = config.background_photo()
     html = html.replace("{{ATHLETE_NAME}}", escape(config.ATHLETE_NAME))
-    html = html.replace("{{BODY_CLASS}}", "has-photo" if photo.exists() else "")
-    if photo.exists():   # ?v= so a replaced photo shows at once
-        css = f':root{{--bg-photo:url("/background.jpg?v={int(photo.stat().st_mtime)}")}}'
+    html = html.replace("{{BODY_CLASS}}", "has-photo" if photo else "")
+    if photo:   # ?v= so a new photo shows at once
+        css = f':root{{--bg-photo:url("/background-photo?v={int(photo.stat().st_mtime)}")}}'
         html = html.replace("</head>", f"<style>{css}</style>\n</head>", 1)
     return HTMLResponse(html)
 
 
-@app.get("/background.jpg", include_in_schema=False)
+@app.get("/background-photo", include_in_schema=False)
 def background_photo():
-    """The athlete's own photo behind the app (data/background.jpg, not in git)."""
-    if not config.BACKGROUND_PHOTO.exists():
+    """The athlete's own photo behind the app (newest picture in data/background/, not in git)."""
+    photo = config.background_photo()
+    if photo is None:
         return Response(status_code=404)
-    return FileResponse(config.BACKGROUND_PHOTO, media_type="image/jpeg",
+    return FileResponse(photo, media_type=config.PHOTO_TYPES[photo.suffix.lower()],
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})

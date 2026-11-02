@@ -33,6 +33,16 @@ DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.co
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
 # Look of the web app: the name in the greeting, and an optional personal
-# background photo (kept in data/, never in git).
+# background photo (kept in data/, never in git). BACKGROUND_PHOTO is a file,
+# or a folder whose newest picture is used -- drop in a new photo to change it.
 ATHLETE_NAME = os.environ.get("ATHLETE_NAME", "Matas")
-BACKGROUND_PHOTO = Path(os.environ.get("BACKGROUND_PHOTO") or PROJECT_ROOT / "data" / "background.jpg")
+BACKGROUND_PHOTO = Path(os.environ.get("BACKGROUND_PHOTO") or PROJECT_ROOT / "data" / "background")
+PHOTO_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+
+def background_photo() -> Path | None:
+    p = BACKGROUND_PHOTO
+    if p.is_dir():
+        pics = [f for f in p.iterdir() if f.is_file() and f.suffix.lower() in PHOTO_TYPES]
+        return max(pics, key=lambda f: f.stat().st_mtime) if pics else None
+    return p if p.is_file() and p.suffix.lower() in PHOTO_TYPES else None

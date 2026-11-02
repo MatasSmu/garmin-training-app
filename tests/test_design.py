@@ -34,12 +34,12 @@ def client(tmp_path):
 
 def test_page_without_photo(client, monkeypatch, tmp_path):
     tc, _ = client
-    monkeypatch.setattr(config, "BACKGROUND_PHOTO", tmp_path / "none.jpg")
+    monkeypatch.setattr(config, "BACKGROUND_PHOTO", tmp_path / "none")
     monkeypatch.setattr(config, "ATHLETE_NAME", "Matas <b>")
     html = tc.get("/").text
     assert 'data-name="Matas &lt;b&gt;"' in html and 'class=""' in html and "--bg-photo" not in html
     assert "{{" not in html
-    assert tc.get("/background.jpg").status_code == 404
+    assert tc.get("/background-photo").status_code == 404
 
 
 def test_page_with_photo(client, monkeypatch, tmp_path):
@@ -48,9 +48,29 @@ def test_page_with_photo(client, monkeypatch, tmp_path):
     photo.write_bytes(b"\xff\xd8\xff\xe0fakejpeg")
     monkeypatch.setattr(config, "BACKGROUND_PHOTO", photo)
     html = tc.get("/").text
-    assert 'class="has-photo"' in html and '--bg-photo:url("/background.jpg?v=' in html
-    r = tc.get("/background.jpg")
+    assert 'class="has-photo"' in html and '--bg-photo:url("/background-photo?v=' in html
+    r = tc.get("/background-photo")
     assert r.status_code == 200 and r.content == photo.read_bytes() and r.headers["content-type"] == "image/jpeg"
+
+
+def test_photo_folder_uses_newest_picture(client, monkeypatch, tmp_path):
+    import os
+
+    tc, _ = client
+    folder = tmp_path / "background"
+    folder.mkdir()
+    (folder / "notes.txt").write_text("not a picture")
+    old, new = folder / "IQFOIL old.jpg", folder / "sunset.png"
+    old.write_bytes(b"old")
+    new.write_bytes(b"new")
+    os.utime(old, (1_000_000, 1_000_000))
+    monkeypatch.setattr(config, "BACKGROUND_PHOTO", folder)
+    r = tc.get("/background-photo")
+    assert r.content == b"new" and r.headers["content-type"] == "image/png"
+    new.unlink()
+    assert tc.get("/background-photo").content == b"old"
+    old.unlink()
+    assert tc.get("/background-photo").status_code == 404 and 'class=""' in tc.get("/").text
 
 
 def test_dashboard_how_you_feel(client):

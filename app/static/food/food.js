@@ -326,6 +326,47 @@
     return addLog({ kcal: t.kcal, protein_g: t.protein_g, carbs_g: t.carbs_g, fat_g: t.fat_g,
                     saved_meal_id: m.id, description: m.name, source: "saved_meal" }, "Added " + m.name);
   }
+  /* A recent item per 100 g: from the food's label, or worked out from the
+     entry's own numbers and weight. null = it was logged without a weight,
+     so the pick sheet works in portions instead. */
+  function per100Of(l) {
+    var food = l.food_id && foodsById()[l.food_id];
+    if (food) {
+      return { food: food, grams: lastGramsFor(food),
+        per100: { kcal_100g: food.kcal_100g, protein_100g: food.protein_100g, carbs_100g: food.carbs_100g, fat_100g: food.fat_100g } };
+    }
+    if (l.grams > 0) {
+      var f = function (x) { return x == null ? null : x / l.grams * 100; };
+      return { food: null, grams: l.grams,
+        per100: { kcal_100g: f(l.kcal), protein_100g: f(l.protein_g), carbs_100g: f(l.carbs_g), fat_100g: f(l.fat_g) } };
+    }
+    return null;
+  }
+  function pickValues(s) {
+    if (s.base) return scale(s.base.per100, s.grams);
+    var k = s.portions, v = function (x) { return x == null ? null : Math.round(x * k * 10) / 10; };
+    return { kcal: v(s.log.kcal) || 0, protein_g: v(s.log.protein_g) || 0, carbs_g: v(s.log.carbs_g), fat_g: v(s.log.fat_g) };
+  }
+  function macroGrid(kcal, p, c, f) {
+    var cell = function (v, label, nd) { return "<span><b>" + (v == null ? "—" : nd ? r1(v) : r0(v)) + "</b>" + label + "</span>"; };
+    return '<div class="macro-grid">' + cell(kcal, "kcal") + cell(p, "protein g", 1) + cell(c, "carbs g", 1) + cell(f, "fat g", 1) + "</div>";
+  }
+  function pickCalcHtml(s) {
+    var m = pickValues(s);
+    return (s.base ? "For " + r0(s.grams) + " g" : "For " + r1(s.portions) + (s.portions === 1 ? " portion" : " portions")) + ": <b>" +
+      r0(m.kcal) + " kcal</b> · " + r1(m.protein_g) + " g protein · " + (m.carbs_g == null ? "—" : r1(m.carbs_g)) + " g carbs · " +
+      (m.fat_g == null ? "—" : r1(m.fat_g)) + " g fat";
+  }
+  function recentSub(l) {
+    var b = per100Of(l);
+    if (b) {
+      var p = b.per100;
+      return "per 100 g: " + r0(p.kcal_100g) + " kcal · " + r0(p.protein_100g) + " P · " + (p.carbs_100g == null ? "—" : r0(p.carbs_100g)) +
+        " C · " + (p.fat_100g == null ? "—" : r0(p.fat_100g)) + " F · last " + r0(b.grams) + " g";
+    }
+    return "1 portion: " + r0(l.kcal) + " kcal · " + pcf(l);
+  }
+
   function relog(l) {
     var food = l.food_id && foodsById()[l.food_id];
     if (food) return logFood(food, lastGramsFor(food));
@@ -509,10 +550,12 @@
     var rec = recents();
     if (rec.length) {
       h.push('<div class="card" style="margin-top:12px"><h2>Recent</h2><div class="list">' + rec.map(function (l, i) {
-        return '<button type="button" class="item" data-act="relog" data-i="' + i + '"><span class="item-main"><span class="item-name">' +
-          esc(l.description || "Entry") + (l.source === "estimate" ? '<span class="tag">est</span>' : "") + '</span><span class="item-sub">' +
-          (l.grams ? r0(l.food_id ? lastGramsFor(foodsById()[l.food_id] || {}) : l.grams) + " g · " : "") + r0(l.kcal) + " kcal · " + r0(l.protein_g) + " g P" +
-          '</span></span><span class="plus" aria-hidden="true">+</span></button>';
+        // Tapping the item opens it (per 100 g + how much you ate); + adds it again as last time.
+        return '<div class="item rec-item" data-test="recent"><button type="button" class="rec-open" data-act="pick" data-i="' + i + '">' +
+          '<span class="item-main"><span class="item-name">' + esc(l.description || "Entry") +
+          (l.source === "estimate" ? '<span class="tag">est</span>' : "") + '</span><span class="item-sub">' + esc(recentSub(l)) +
+          '</span></span></button><button type="button" class="plus" data-act="relog" data-i="' + i + '" aria-label="Add ' +
+          esc(l.description || "entry") + ' again">+</button></div>';
       }).join("") + "</div></div>");
     }
 
@@ -808,6 +851,25 @@
         if (s.error) h.push('<p class="err">' + esc(s.error) + "</p>");
         h.push('<button type="button" class="big-btn" data-act="label-save">Save food & add</button>');
       }
+    } else if (s.type === "pick") {
+      var pl = s.log, pb = s.base;
+      h.push(head(pl.description || "Entry"));
+      if (pb) {
+        var p100 = pb.per100;
+        h.push('<p class="muted pick-label">Per 100 g' + (pb.food ? "" : " (from what you logged before)") + "</p>" +
+          macroGrid(p100.kcal_100g, p100.protein_100g, p100.carbs_100g, p100.fat_100g));
+        h.push('<label class="field">How much did you eat? (g)<input name="amount" inputmode="decimal" autocomplete="off" value="' +
+          esc(r0(s.grams)) + '" data-act="pick-amount" autofocus></label>');
+      } else {
+        h.push('<p class="muted pick-label">One portion (it was logged without a weight)</p>' +
+          macroGrid(pl.kcal, pl.protein_g, pl.carbs_g, pl.fat_g));
+        h.push('<label class="field">Portions<input name="amount" inputmode="decimal" autocomplete="off" value="' +
+          esc(r1(s.portions)) + '" data-act="pick-amount" autofocus></label>');
+      }
+      h.push('<p class="pick-total" id="pickCalc" data-test="pick-total">' + pickCalcHtml(s) + "</p>");
+      h.push(mealSelect(defaultMeal(VIEW.date === today() ? nowHHMM() : "12:00")));
+      if (s.error) h.push('<p class="err">' + esc(s.error) + "</p>");
+      h.push('<button type="button" class="big-btn" data-act="pick-add">Add</button>');
     } else if (s.type === "edit") {
       var l = LOCAL.logs[s.id];
       if (!l) { closeSheet(); return; }
@@ -1002,6 +1064,22 @@
       closeSheet();
       return logFood(f, grams);
     }
+    if (act === "pick-add") {
+      var amount = num("amount");
+      if (s.base ? !ok(amount, 1, 5000) : !ok(amount, 0.1, 20)) {
+        s.error = s.base ? "How many grams? (1–5000)" : "How many portions? (0.1–20)"; return renderSheet();
+      }
+      if (s.base) s.grams = amount; else s.portions = amount;
+      var pv = pickValues(s), src = s.log;
+      var fields = Object.assign(pv, {
+        meal: val("meal"), description: src.description,
+        grams: s.base ? amount : null, food_id: s.base && s.base.food ? s.base.food.id : null,
+        source: s.base && s.base.food ? "food" : src.source === "estimate" ? "estimate" : "manual",
+      });
+      fields.protein_g = fields.protein_g || 0;
+      closeSheet();
+      return addLog(fields, "Added " + (src.description || "entry") + (s.base ? " " + r0(amount) + " g" : amount !== 1 ? " × " + r1(amount) : ""));
+    }
     if (act === "edit-save") {
       var e = LOCAL.logs[s.id], fd = e.food_id && foodsById()[e.food_id];
       var kk = num("kcal"), pp = num("protein"), cc = num("carbs"), ff = num("fat");
@@ -1101,6 +1179,12 @@
     } else if (act === "relog") {
       var r = recents()[+t.dataset.i];
       if (r) relog(r);
+    } else if (act === "pick") {
+      var pr = recents()[+t.dataset.i];
+      if (pr) {
+        var base = per100Of(pr);
+        openSheet({ type: "pick", log: pr, base: base, grams: base ? base.grams : null, portions: 1 });
+      }
     } else if (act === "sheet") {
       openSheet({ type: t.dataset.sheet });
     } else if (act === "edit") {
@@ -1155,6 +1239,14 @@
     if (t && t.tagName !== "INPUT") sheetAction(t.dataset.act, t);
   });
   sheetEl.addEventListener("input", function (e) {
+    if (e.target.dataset.act === "pick-amount" && SHEET && SHEET.type === "pick") {
+      var a = parseNum(e.target.value);
+      if (a && !isNaN(a) && a > 0) {
+        if (SHEET.base) SHEET.grams = a; else SHEET.portions = a;
+        document.getElementById("pickCalc").innerHTML = pickCalcHtml(SHEET);
+      }
+      return;
+    }
     if (e.target.dataset.act === "grams" && SHEET && SHEET.food) {
       var g = parseNum(e.target.value);
       if (g && !isNaN(g)) {
@@ -1166,6 +1258,7 @@
   });
   sheetEl.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && e.target.name === "code") { e.preventDefault(); lookup(e.target.value); }
+    if (e.key === "Enter" && e.target.name === "amount" && SHEET && SHEET.type === "pick") { e.preventDefault(); sheetAction("pick-add", e.target); }
   });
   sheetBack.addEventListener("click", closeSheet);
 

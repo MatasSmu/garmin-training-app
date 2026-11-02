@@ -109,6 +109,15 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .item-num{text-align:right; font-size:13px; white-space:nowrap; color:var(--ink-muted);}
 .item-num b{color:var(--ink);}
 .item-num b{display:block; font-size:15px;}
+/* Recent: the item opens its per-100 g sheet, + adds it again as last time. */
+.rec-item{padding:0;}
+.rec-open{flex:1; min-width:0; display:flex; align-items:center; min-height:52px; padding:6px 0; border:0; background:transparent; text-align:left;}
+.rec-item .plus{border:0; cursor:pointer;}
+.macro-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin:4px 0 12px; font-size:12px; color:var(--ink-muted);}
+.macro-grid span{background:var(--surface-2); border-radius:12px; padding:8px 8px 7px;}
+.macro-grid b{display:block; font-size:18px; color:var(--ink); font-variant-numeric:tabular-nums;}
+.pick-label{margin:6px 0 0;}
+.pick-total{margin:10px 0 4px; padding:10px 12px; border-radius:12px; background:var(--teal-soft); color:var(--ink); font-size:14px;}
 .plus{flex:none; width:44px; height:44px; border-radius:12px; background:var(--teal-soft); color:var(--teal-strong); font-size:24px; font-weight:700; display:flex; align-items:center; justify-content:center;}
 .tag{font-size:11px; font-weight:700; border-radius:6px; padding:1px 6px; background:var(--plan-soft); color:var(--plan); margin-left:6px; vertical-align:1px;}
 .tag.wait{background:var(--warn-soft); color:var(--warn);}

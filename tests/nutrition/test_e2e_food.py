@@ -107,7 +107,14 @@ def test_weights_food_and_offline_sync(server):
 
         # ---- 3. offline: repeat the manual food from Recent
         ctx.set_offline(True)
-        page.click('[data-act="relog"] >> text=Chicken & rice')
+        # Tapping the item only opens it (per portion: it was logged without grams) -- nothing is added yet ...
+        page.click('[data-test="recent"]:has-text("Chicken & rice") [data-act="pick"]')
+        page.wait_for_selector('[data-test="pick-total"]')
+        assert "650 kcal" in page.inner_text('[data-test="pick-total"]')
+        assert _totals(page) == ("1,020", "96")
+        page.click('[data-act="close"]')
+        # ... the + button adds it again as last time.
+        page.click('[data-test="recent"]:has-text("Chicken & rice") [data-act="relog"]')
         assert _totals(page) == ("1,670", "148")
         page.wait_for_function("document.querySelector('#syncStatus').textContent === '1 change waiting to sync'",
                                timeout=10000)

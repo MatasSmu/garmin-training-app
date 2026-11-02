@@ -201,6 +201,18 @@
       (s ? '<div class="split" aria-label="Energy split: protein ' + s.p + "%, carbs " + s.c + "%, fat " + s.f + '%">' +
         '<i class="sp-p" style="width:' + s.p + '%"></i><i class="sp-c" style="width:' + s.c + '%"></i><i class="sp-f" style="width:' + s.f + '%"></i></div>' : "");
   }
+  /* A warning when kcal and the macros clearly disagree (protein and carbs 4,
+     fat 9 kcal per g), e.g. 54 kcal with 54 g fat. */
+  function macroGap(x) {
+    if (x.carbs_g == null && x.fat_g == null) return null;
+    var fromMacros = (x.protein_g || 0) * 4 + (x.carbs_g || 0) * 4 + (x.fat_g || 0) * 9, kcal = +x.kcal || 0;
+    return Math.abs(fromMacros - kcal) > Math.max(80, 0.3 * Math.max(kcal, fromMacros)) ? Math.round(fromMacros) : null;
+  }
+  function macroCheck(x) {
+    var g = macroGap(x);
+    return g === null ? "" : '<p class="warn-note" data-test="macro-gap">These don\'t add up: the protein, carbs and fat make about ' + g +
+      " kcal, not " + r0(x.kcal) + ". Check the numbers.</p>";
+  }
   function pcf(t) { return r0(t.protein_g) + " P · " + r0(t.carbs_g) + " C · " + r0(t.fat_g) + " F"; }
 
   function logsList() {
@@ -472,7 +484,9 @@
       (isToday ? "Today, " : "") + fmtDay(day) + '</b><button type="button" class="nav-btn" data-act="day" data-d="1" aria-label="Next day"' +
       (isToday ? " disabled" : "") + ">›</button></div>");
     h.push('<div class="card">' + bar("Protein", tot.protein_g, "g", t.protein_g, null, "protein-total") +
-      bar("Calories", tot.kcal, "kcal", t.kcal_min, t.kcal_max, "kcal-total") + macroCard(tot, logs) + "</div>");
+      bar("Calories", tot.kcal, "kcal", t.kcal_min, t.kcal_max, "kcal-total") +
+      (t.carbs_g ? bar("Carbs", tot.carbs_g, "g", t.carbs_g, null, "carbs-total") : "") +
+      (t.fat_g ? bar("Fat", tot.fat_g, "g", t.fat_g, null, "fat-total") : "") + macroCard(tot, logs) + "</div>");
 
     var meals = savedMeals();
     h.push('<div class="card"><div class="card-head"><h2>Saved meals</h2>' +
@@ -513,7 +527,9 @@
         group.map(function (l) {
           return '<button type="button" class="item" data-act="edit" data-id="' + esc(l.id) + '"><span class="item-main"><span class="item-name">' +
             esc(l.description || "Entry") + (l.source === "estimate" ? '<span class="tag">est</span>' : "") +
-            (isPending(l) ? '<span class="tag wait">waiting</span>' : "") + '</span><span class="item-sub">' + esc(l.time || "") +
+            (isPending(l) ? '<span class="tag wait">waiting</span>' : "") +
+            (macroGap(l) !== null ? '<span class="tag check" title="kcal and macros don\'t add up — tap to fix">check</span>' : "") +
+            '</span><span class="item-sub">' + esc(l.time || "") +
             (l.grams ? " · " + r0(l.grams) + " g" : "") + '</span></span><span class="item-num mono"><b>' + r0(l.kcal) + "</b>" + pcf(l) + "</span></button>";
         }).join("") + "</div>");
     });
@@ -741,12 +757,15 @@
         h.push('<button type="button" class="big-btn" data-act="estimate"' + (s.busy ? " disabled" : "") + ">" + (s.busy ? "Estimating…" : "Estimate") + "</button>");
       } else {
         h.push('<p class="muted">AI estimate — check and fix the numbers, then add. Nothing is saved until you tap Add.</p>');
-        h.push('<div class="est-head"><span>Item</span><span>kcal</span><span>protein</span><span></span></div>');
+        h.push('<div class="est-head"><span>kcal</span><span>Protein g</span><span>Carbs g</span><span>Fat g</span><span></span></div>');
         s.items.forEach(function (it, i) {
-          h.push('<div class="est-row" data-row="' + i + '"><input name="n' + i + '" value="' + esc(it.name) + '" aria-label="Item">' +
+          h.push('<div class="est-row" data-row="' + i + '"><input class="est-name" name="n' + i + '" value="' + esc(it.name) + '" aria-label="Item">' +
             '<input name="k' + i + '" inputmode="decimal" value="' + esc(r0(it.kcal)) + '" aria-label="kcal">' +
             '<input name="p' + i + '" inputmode="decimal" value="' + esc(r1(it.protein_g)) + '" aria-label="protein g">' +
-            '<button type="button" class="x-btn" data-act="est-del" data-i="' + i + '" aria-label="Remove">×</button></div>');
+            '<input name="c' + i + '" inputmode="decimal" value="' + esc(it.carbs_g != null ? r1(it.carbs_g) : "") + '" aria-label="carbs g">' +
+            '<input name="f' + i + '" inputmode="decimal" value="' + esc(it.fat_g != null ? r1(it.fat_g) : "") + '" aria-label="fat g">' +
+            '<button type="button" class="x-btn" data-act="est-del" data-i="' + i + '" aria-label="Remove">×</button>' +
+            macroCheck(it) + "</div>");
         });
         if (s.note) h.push('<p class="muted">' + esc(s.note) + "</p>");
         h.push(mealSelect(defaultMeal(nowHHMM())));
@@ -794,14 +813,17 @@
       if (!l) { closeSheet(); return; }
       var food = l.food_id && foodsById()[l.food_id];
       h.push(head(l.description || "Entry"));
+      h.push('<label class="field">What<input name="name" value="' + esc(l.description || "") + '"></label>');
       if (food) {
-        h.push('<label class="field">Grams<input name="grams" inputmode="decimal" value="' + esc(r0(l.grams)) + '" autofocus></label>' +
-          '<p class="muted">' + r0(food.kcal_100g) + " kcal · " + r1(food.protein_100g) + " g protein per 100 g</p>");
-      } else {
-        h.push('<label class="field">What<input name="name" value="' + esc(l.description || "") + '"></label>' +
-          '<div class="row"><label class="field">kcal<input name="kcal" inputmode="decimal" value="' + esc(r0(l.kcal)) + '"></label>' +
-          '<label class="field">Protein g<input name="protein" inputmode="decimal" value="' + esc(r1(l.protein_g)) + '"></label></div>');
+        h.push('<label class="field">Grams<input name="grams" inputmode="decimal" value="' + esc(r0(l.grams)) + '"></label>' +
+          '<p class="muted">' + r0(food.kcal_100g) + " kcal · " + r1(food.protein_100g) + " g protein per 100 g — change grams to recalculate, " +
+          "or type the numbers yourself.</p>");
       }
+      h.push('<div class="row"><label class="field">kcal<input name="kcal" inputmode="decimal" value="' + esc(r0(l.kcal)) + '"></label>' +
+        '<label class="field">Protein g<input name="protein" inputmode="decimal" value="' + esc(r1(l.protein_g)) + '"></label></div>' +
+        '<div class="row"><label class="field">Carbs g<input name="carbs" inputmode="decimal" value="' + esc(l.carbs_g != null ? r1(l.carbs_g) : "") + '"></label>' +
+        '<label class="field">Fat g<input name="fat" inputmode="decimal" value="' + esc(l.fat_g != null ? r1(l.fat_g) : "") + '"></label></div>' +
+        macroCheck(l));
       h.push('<div class="row">' + mealSelect(l.meal) + '<label class="field">Time<input name="time" type="time" value="' + esc(l.time || "") + '"></label></div>');
       if (s.error) h.push('<p class="err">' + esc(s.error) + "</p>");
       h.push('<button type="button" class="big-btn" data-act="edit-save">Save</button>' +
@@ -942,7 +964,10 @@
     if (act === "est-save") {
       readEstimate(s);
       var meal = val("meal");
-      var bad = s.items.some(function (it) { return !ok(it.kcal, 0, 20000) || !ok(it.protein_g, 0, 1000) || !it.name; });
+      var bad = s.items.some(function (it) {
+        return !ok(it.kcal, 0, 20000) || !ok(it.protein_g, 0, 1000) || !it.name ||
+          (it.carbs_g !== null && !ok(it.carbs_g, 0, 3000)) || (it.fat_g !== null && !ok(it.fat_g, 0, 2000));
+      });
       if (bad) { s.error = "Check the numbers."; return renderSheet(); }
       var n = s.items.length;
       s.items.forEach(function (it) {
@@ -979,15 +1004,19 @@
     }
     if (act === "edit-save") {
       var e = LOCAL.logs[s.id], fd = e.food_id && foodsById()[e.food_id];
-      if (fd) {
-        var gg = num("grams");
+      var kk = num("kcal"), pp = num("protein"), cc = num("carbs"), ff = num("fat");
+      if (!ok(kk, 0, 20000)) { s.error = "kcal is needed."; return renderSheet(); }
+      if ((pp !== null && !ok(pp, 0, 1000)) || (cc !== null && !ok(cc, 0, 3000)) || (ff !== null && !ok(ff, 0, 2000))) {
+        s.error = "Check protein, carbs and fat (grams)."; return renderSheet();
+      }
+      var gg = fd ? num("grams") : null;
+      if (fd && gg !== e.grams) {          // grams changed: recalculate from the food's label
         if (!ok(gg, 1, 5000)) { s.error = "Grams?"; return renderSheet(); }
         Object.assign(e, scale(fd, gg), { grams: gg });
-      } else {
-        var kk = num("kcal"), pp = num("protein");
-        if (!ok(kk, 0, 20000)) { s.error = "kcal is needed."; return renderSheet(); }
-        e.kcal = kk; e.protein_g = opt(pp) || 0; e.description = val("name").trim() || e.description;
+      } else {                             // the numbers as typed
+        e.kcal = kk; e.protein_g = opt(pp) || 0; e.carbs_g = opt(cc); e.fat_g = opt(ff);
       }
+      e.description = val("name").trim() || e.description;
       e.meal = val("meal");
       if (val("time")) e.time = val("time");
       put("logs", e);
@@ -1031,6 +1060,8 @@
       it.name = val("n" + i).trim();
       it.kcal = parseNum(val("k" + i));
       it.protein_g = parseNum(val("p" + i));
+      it.carbs_g = opt(parseNum(val("c" + i)));
+      it.fat_g = opt(parseNum(val("f" + i)));
     });
   }
 

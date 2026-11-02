@@ -200,10 +200,16 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .field textarea{min-height:80px; resize:vertical;}
 .row{display:flex; gap:8px;}
 .row > *{flex:1; min-width:0;}
-.est-row{display:grid; grid-template-columns:1fr 76px 64px 40px; gap:6px; align-items:center; margin-top:8px;}
-.est-row input{min-height:44px; border:1px solid var(--border); border-radius:10px; padding:4px 8px; background:var(--surface); font-size:15px; width:100%;}
+/* Estimate rows: the name on its own line, then kcal / protein / carbs / fat. */
+.est-row{display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)) 40px; gap:6px; align-items:center; margin-top:10px;
+  padding-top:10px; border-top:1px solid var(--border);}
+.est-row .est-name{grid-column:1 / -1;}
+.est-row .warn-note{grid-column:1 / -1; margin:0;}
+.est-row input{min-height:44px; border:1px solid var(--border); border-radius:10px; padding:4px 8px; background:var(--surface); font-size:15px; width:100%; min-width:0;}
 .est-row .x-btn{width:40px; height:40px; font-size:18px;}
-.est-head{display:grid; grid-template-columns:1fr 76px 64px 40px; gap:6px; font-size:12px; color:var(--ink-muted); margin-top:10px;}
+.est-head{display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)) 40px; gap:6px; font-size:12px; color:var(--ink-muted); margin-top:10px;}
+.warn-note{font-size:13px; color:var(--warn); background:var(--warn-soft); border-radius:10px; padding:8px 10px; margin:8px 0 0;}
+.tag.check{background:var(--warn-soft); color:var(--warn);}
 .scan-video{width:100%; max-height:42vh; background:#000; border-radius:12px; object-fit:cover; margin-top:8px;}
 .check{display:flex; align-items:center; gap:10px; min-height:44px; border-top:1px solid var(--border);}
 .check input{width:22px; height:22px;}

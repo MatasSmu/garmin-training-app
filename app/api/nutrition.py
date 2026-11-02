@@ -177,6 +177,31 @@ def get_targets(conn: sqlite3.Connection = Depends(get_db)):
     return store.targets(conn)
 
 
+class TargetsIn(BaseModel):
+    """Own daily targets; null = use the coach's plan (carbs / fat: no target)."""
+    kcal_min: float | None = Field(default=None, ge=500, le=10000)
+    kcal_max: float | None = Field(default=None, ge=500, le=10000)
+    protein_g: float | None = Field(default=None, ge=0, le=600)
+    carbs_g: float | None = Field(default=None, ge=0, le=1500)
+    fat_g: float | None = Field(default=None, ge=0, le=600)
+
+
+@router.put("/api/nutrition/targets")
+def put_targets(payload: TargetsIn, conn: sqlite3.Connection = Depends(get_db)):
+    plan = store.plan_targets(conn)
+    lo = payload.kcal_min if payload.kcal_min is not None else plan.get("kcal_min")
+    hi = payload.kcal_max if payload.kcal_max is not None else plan.get("kcal_max")
+    if lo is not None and hi is not None and lo > hi:
+        raise HTTPException(422, "The kcal minimum is above the maximum.")
+    return store.set_own_targets(conn, payload.model_dump())
+
+
+@router.delete("/api/nutrition/targets")
+def reset_targets(conn: sqlite3.Connection = Depends(get_db)):
+    """Back to the coach's plan."""
+    return store.set_own_targets(conn, {})
+
+
 @router.get("/api/nutrition/weights")
 def get_weights(start: str | None = None, end: str | None = None, conn: sqlite3.Connection = Depends(get_db)):
     return store.list_weights(conn, start, end)
@@ -253,6 +278,30 @@ def get_checkins(days: int = 60, conn: sqlite3.Connection = Depends(get_db)):
     start = (date.today().toordinal() - max(1, min(days, 3650)))
     rows = store.list_weights(conn, date.fromordinal(start).isoformat())
     return list(reversed(rows))
+
+
+class LogPatch(BaseModel):
+    """Fields of an eaten item that can be changed from the laptop (only the ones sent change)."""
+    description: str | None = Field(default=None, max_length=300)
+    meal: Literal["breakfast", "lunch", "dinner", "snack"] | None = None
+    time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    kcal: float | None = Field(default=None, ge=0, le=20000)
+    protein_g: float | None = Field(default=None, ge=0, le=1000)
+    carbs_g: float | None = Field(default=None, ge=0, le=3000)
+    fat_g: float | None = Field(default=None, ge=0, le=2000)
+    grams: float | None = Field(default=None, ge=0, le=5000)
+    deleted: bool | None = None
+
+
+@router.patch("/api/nutrition/logs/{log_id}")
+def patch_log(log_id: str, payload: LogPatch, conn: sqlite3.Connection = Depends(get_db)):
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("kcal", 0) is None:
+        raise HTTPException(422, "kcal can't be empty")
+    log = store.edit_log(conn, log_id, changes)
+    if log is None:
+        raise HTTPException(404, "no such entry")
+    return {"log": log, "totals": store.day_totals(conn, log["date"])}
 
 
 @router.get("/api/nutrition/day/{day}")

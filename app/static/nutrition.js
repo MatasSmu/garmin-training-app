@@ -29,11 +29,13 @@
       var s = r[0];
       root.textContent = "";
       root.appendChild(headPanel(s));
+      root.appendChild(foodLogPanel());
       root.appendChild(weightPanel(s.weight));
       root.appendChild(checkinsPanel(r[1]));
       root.appendChild(energyPanel(s));
       root.appendChild(daysPanel(s));
       root.appendChild(weeksPanel(s.weeks));
+      root.appendChild(targetsPanel(s.targets));
       if (r[2]) root.appendChild(sheetPanel(r[2]));
     }).catch(function (e) {
       root.textContent = "";
@@ -51,13 +53,16 @@
   function headPanel(s) {
     var w = s.weight, t = s.targets, d = s.today;
     return TK.panel("Weight & food", "Goal " + t.goal_weight_kg + " kg by " + fmtDate(t.goal_date) + " (" + signed(t.target_rate_kg_week, 2) +
-      " kg/week) · " + r0(t.kcal_min) + "–" + r0(t.kcal_max) + " kcal and " + t.protein_g + " g protein a day — from the coach's plan.", [
+      " kg/week) · " + r0(t.kcal_min) + "–" + r0(t.kcal_max) + " kcal and " + t.protein_g + " g protein a day" +
+      (t.carbs_g ? ", " + r0(t.carbs_g) + " g carbs" : "") + (t.fat_g ? ", " + r0(t.fat_g) + " g fat" : "") +
+      ((t.own || []).length ? " — your own targets (change them under Daily targets)." : " — from the coach's plan."), [
       el("div", { class: "hero-stats nut-stats" }, [
         tile(w.trend_kg != null ? w.trend_kg.toFixed(1) + " kg" : "—", "Trend weight" + (w.trend_date ? ", " + fmtDate(w.trend_date) : ""), "accent", "nut-trend"),
         tile(w.rate_kg_week != null ? signed(w.rate_kg_week, 2) + " kg/wk" : "—", "Weekly rate (target " + signed(w.target_rate_kg_week, 1) + ")"),
         tile(w.status_label, w.projected_date ? w.goal_weight_kg + " kg projected " + fmtDate(w.projected_date) : "Status vs plan", "nut-" + w.status, "nut-status"),
         tile(r0(d.protein_g) + " / " + t.protein_g + " g", "Protein today · " + r0(d.kcal) + " kcal"),
-        tile(r0(d.carbs_g) + " g · " + r0(d.fat_g) + " g", "Carbs · fat today" +
+        tile(r0(d.carbs_g) + (t.carbs_g ? "/" + r0(t.carbs_g) : "") + " g · " + r0(d.fat_g) + (t.fat_g ? "/" + r0(t.fat_g) : "") + " g",
+          "Carbs · fat today" +
           (d.protein_pct != null ? " (energy " + d.protein_pct + "% P / " + d.carbs_pct + "% C / " + d.fat_pct + "% F)" : ""), null, "nut-cf"),
         tile(mealsText(d), "Eaten today" + (d.entries ? " · " + d.entries + " entries" : ""), null, "nut-meals"),
       ]),
@@ -244,6 +249,140 @@
       (st.import_times && st.import_times.length ? ", automatically at " + st.import_times.join(" and ") +
         " (catches up if the laptop was off)" : "") +
       ". New and changed rows are added; nothing in the app is deleted.", kids, { "data-test": "sheet-panel" });
+  }
+
+  // ---------------------------------------------------------- food log (edit)
+  var MEALS = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snack", "Snack"]];
+  var logDay = null;
+
+  function isoDay(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function shiftDay(iso, n) { var d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoDay(d); }
+  function numOrNull(v) { v = String(v).trim().replace(",", "."); return v === "" ? null : Number(v); }
+  function gapKcal(x) {   // same check as the phone page: kcal vs 4 P + 4 C + 9 F
+    if (x.carbs_g == null && x.fat_g == null) return null;
+    var m = (x.protein_g || 0) * 4 + (x.carbs_g || 0) * 4 + (x.fat_g || 0) * 9;
+    return Math.abs(m - (x.kcal || 0)) > Math.max(80, 0.3 * Math.max(x.kcal || 0, m)) ? Math.round(m) : null;
+  }
+
+  /* Every eaten item of one day, each number editable; Save sends only that
+     row (the phone page picks the change up on its next sync). */
+  function foodLogPanel() {
+    logDay = logDay || isoDay(new Date());
+    var body = el("div", { class: "foodlog-body" });
+    var dateIn = el("input", { type: "date", value: logDay, max: isoDay(new Date()), "aria-label": "Day",
+      onchange: function () { if (dateIn.value) { logDay = dateIn.value; fill(); } } });
+    var prev = el("button", { type: "button", class: "btn-ghost", text: "‹ Day before", onclick: function () { logDay = shiftDay(logDay, -1); dateIn.value = logDay; fill(); } });
+    var next = el("button", { type: "button", class: "btn-ghost", text: "Day after ›", onclick: function () {
+      if (logDay < isoDay(new Date())) { logDay = shiftDay(logDay, 1); dateIn.value = logDay; fill(); } } });
+
+    function fill() {
+      next.disabled = logDay >= isoDay(new Date());
+      body.textContent = "";
+      body.appendChild(el("p", { class: "tk-msg", text: "Loading…" }));
+      TK.api("/api/nutrition/day/" + logDay).then(function (d) {
+        body.textContent = "";
+        var logs = d.logs.filter(function (l) { return !l.deleted; });
+        var tt = d.totals;
+        body.appendChild(el("p", { class: "panel-sub", "data-test": "foodlog-totals", text: logs.length
+          ? Math.round(tt.kcal).toLocaleString("en-US") + " kcal · " + Math.round(tt.protein_g) + " g protein · " + Math.round(tt.carbs_g) +
+            " g carbs · " + Math.round(tt.fat_g) + " g fat · " + mealsText(tt)
+          : "Nothing logged on " + fmtDate(logDay) + "." }));
+        if (!logs.length) return;
+        var table = el("table", { class: "foodlog" }, [
+          el("thead", null, [el("tr", null, ["What", "Meal", "Time", "kcal", "Protein g", "Carbs g", "Fat g", ""].map(function (h) {
+            return el("th", { text: h });
+          }))]),
+          el("tbody", null, logs.sort(function (a, b) { return (a.time || "").localeCompare(b.time || ""); }).map(logRow)),
+        ]);
+        body.appendChild(el("div", { class: "table-scroll foodlog-scroll" }, [table]));
+      }).catch(function (e) {
+        body.textContent = "";
+        body.appendChild(el("p", { class: "tk-msg err", text: "Couldn't load the day: " + e.message }));
+      });
+    }
+
+    function logRow(l) {
+      var f = {};
+      function input(key, value, attrs) {
+        f[key] = el("input", Object.assign({ value: value == null ? "" : String(value), "aria-label": key, oninput: changed }, attrs || {}));
+        return el("td", null, [f[key]]);
+      }
+      var meal = el("select", { "aria-label": "Meal", onchange: changed }, MEALS.map(function (m) {
+        return el("option", { value: m[0], text: m[1], selected: l.meal === m[0] });
+      }));
+      var save = el("button", { type: "button", class: "btn-primary", text: "Save", disabled: true });
+      var del = el("button", { type: "button", class: "btn-ghost danger", text: "Delete" });
+      var warn = el("div", { class: "foodlog-warn", "data-test": "foodlog-gap" });
+      var row = el("tr", { "data-test": "foodlog-row" }, [
+        input("description", l.description, { class: "fl-name" }), el("td", null, [meal]),
+        input("time", l.time, { type: "time" }),
+        input("kcal", l.kcal != null ? Math.round(l.kcal) : "", { inputmode: "decimal", class: "fl-num" }),
+        input("protein_g", l.protein_g, { inputmode: "decimal", class: "fl-num" }),
+        input("carbs_g", l.carbs_g, { inputmode: "decimal", class: "fl-num" }),
+        input("fat_g", l.fat_g, { inputmode: "decimal", class: "fl-num" }),
+        el("td", { class: "fl-actions" }, [save, " ", del, warn]),
+      ]);
+      function values() {
+        return { description: f.description.value.trim(), meal: meal.value, time: f.time.value || null,
+          kcal: numOrNull(f.kcal.value), protein_g: numOrNull(f.protein_g.value),
+          carbs_g: numOrNull(f.carbs_g.value), fat_g: numOrNull(f.fat_g.value) };
+      }
+      function showGap() {
+        var g = gapKcal(values());
+        warn.textContent = g === null ? "" : "Doesn't add up: the macros make ~" + g + " kcal.";
+      }
+      function changed() { save.disabled = false; row.classList.add("changed"); showGap(); }
+      showGap();
+      save.onclick = function () {
+        var v = values();
+        if (v.kcal === null || isNaN(v.kcal) || ["protein_g", "carbs_g", "fat_g"].some(function (k) { return v[k] !== null && isNaN(v[k]); })) {
+          warn.textContent = "kcal is needed and the numbers must be numbers."; return;
+        }
+        if (v.protein_g === null) v.protein_g = 0;
+        save.disabled = true; save.textContent = "Saving…";
+        TK.api("/api/nutrition/logs/" + encodeURIComponent(l.id), { method: "PATCH", body: v }).then(function () { load(); })
+          .catch(function (e) { save.disabled = false; save.textContent = "Save"; warn.textContent = e.message; });
+      };
+      del.onclick = function () {
+        if (!confirm("Delete “" + (l.description || "entry") + "”?")) return;
+        TK.api("/api/nutrition/logs/" + encodeURIComponent(l.id), { method: "PATCH", body: { deleted: true } }).then(function () { load(); })
+          .catch(function (e) { warn.textContent = e.message; });
+      };
+      return row;
+    }
+
+    fill();
+    return TK.panel("Food log", "Change any eaten item here — name, meal, time, kcal, protein, carbs or fat. The phone picks the change up when it next syncs.", [
+      el("div", { class: "plan-actions foodlog-nav" }, [prev, dateIn, next]), body,
+    ], { "data-test": "foodlog-panel" });
+  }
+
+  // ---------------------------------------------------------- daily targets
+  function targetsPanel(t) {
+    var own = t.own || [], plan = t.plan || {}, f = {};
+    var fields = [["protein_g", "Protein", "g / day"], ["kcal_min", "Calories from", "kcal"], ["kcal_max", "Calories to", "kcal"],
+                  ["carbs_g", "Carbs", "g / day"], ["fat_g", "Fat", "g / day"]];
+    var msg = el("p", { class: "panel-sub", "data-test": "targets-msg" });
+    var grid = el("div", { class: "targets-grid" }, fields.map(function (x) {
+      var k = x[0];
+      f[k] = el("input", { inputmode: "decimal", "aria-label": x[1], value: own.indexOf(k) >= 0 && t[k] != null ? String(t[k]) : "",
+        placeholder: plan[k] != null ? String(plan[k]) + " (plan)" : "no target", "data-test": "target-" + k });
+      return el("label", { class: "target-field" }, [el("span", { text: x[1] }), f[k], el("small", { text: x[2] })]);
+    }));
+    var save = el("button", { type: "button", class: "btn-primary", text: "Save targets", onclick: function () {
+      var body = {}, bad = false;
+      fields.forEach(function (x) { var v = numOrNull(f[x[0]].value); if (v !== null && isNaN(v)) bad = true; body[x[0]] = v; });
+      if (bad) { msg.className = "tk-msg err"; msg.textContent = "Only numbers, please."; return; }
+      TK.api("/api/nutrition/targets", { method: "PUT", body: body }).then(load)
+        .catch(function (e) { msg.className = "tk-msg err"; msg.textContent = e.message; });
+    } });
+    var reset = el("button", { type: "button", class: "btn-ghost", text: "Back to the coach's plan", disabled: !own.length, onclick: function () {
+      TK.api("/api/nutrition/targets", { method: "DELETE" }).then(load);
+    } });
+    msg.textContent = own.length ? "Your own: " + own.map(function (k) { return fields.filter(function (x) { return x[0] === k; })[0][1].toLowerCase(); }).join(", ") +
+      ". Empty boxes use the coach's plan (carbs / fat: no target)." : "Using the coach's plan. Type a number to set your own; leave empty to keep the plan.";
+    return TK.panel("Daily targets", "Protein and calories come from the coach's plan unless you set your own; carbs and fat targets are optional.",
+      [grid, el("div", { class: "plan-actions" }, [save, reset]), msg], { "data-test": "targets-panel" });
   }
 
   tabBtn.addEventListener("click", load);

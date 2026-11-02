@@ -45,7 +45,42 @@ def _plan_json(conn: sqlite3.Connection) -> dict:
         return {}
 
 
+TARGET_KEYS = ("kcal_min", "kcal_max", "protein_g", "carbs_g", "fat_g")
+TARGETS_SETTING = "nutrition_targets"
+
+
+def own_targets(conn: sqlite3.Connection) -> dict:
+    """Daily targets the athlete set in the app (override the plan's)."""
+    row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (TARGETS_SETTING,)).fetchone()
+    try:
+        data = json.loads(row["value"]) if row and row["value"] else {}
+    except ValueError:
+        data = {}
+    return {k: data[k] for k in TARGET_KEYS if data.get(k) is not None}
+
+
+def set_own_targets(conn: sqlite3.Connection, values: dict) -> dict:
+    """Save the athlete's own targets; a None / missing key falls back to the plan."""
+    keep = {k: values[k] for k in TARGET_KEYS if values.get(k) is not None}
+    conn.execute("INSERT INTO app_settings (key, value) VALUES (?, ?) "
+                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (TARGETS_SETTING, json.dumps(keep)))
+    conn.commit()
+    return targets(conn)
+
+
 def targets(conn: sqlite3.Connection) -> dict:
+    """Goal weight, rate and daily targets. Daily kcal / protein come from the
+    coach's plan file unless the athlete set their own in the app; carbs and
+    fat targets exist only when the athlete set them."""
+    plan_t = plan_targets(conn)
+    own = own_targets(conn)
+    out = {**plan_t, **own}
+    out["own"] = sorted(own)
+    out["plan"] = {k: plan_t.get(k) for k in TARGET_KEYS}
+    return out
+
+
+def plan_targets(conn: sqlite3.Connection) -> dict:
     """Goal weight, rate and daily targets, all from the coach's plan file."""
     data = _plan_json(conn)
     plan = data.get("plan") or {}
@@ -65,6 +100,8 @@ def targets(conn: sqlite3.Connection) -> dict:
         "kcal_min": nutrition.get("kcal_per_day_min"),
         "kcal_max": nutrition.get("kcal_per_day_max"),
         "protein_g": nutrition.get("protein_g_per_day"),
+        "carbs_g": nutrition.get("carbs_g_per_day"),
+        "fat_g": nutrition.get("fat_g_per_day"),
     }
 
 
@@ -383,6 +420,21 @@ def upsert_log(conn: sqlite3.Connection, entry: dict) -> str:
         (entry["id"], *(vals[k] for k in LOG_FIELDS), int(bool(entry.get("deleted"))), incoming, now, now),
     )
     return "updated" if row is not None else "created"
+
+
+EDITABLE_LOG_FIELDS = ("description", "meal", "time", "kcal", "protein_g", "carbs_g", "fat_g", "grams", "deleted")
+
+
+def edit_log(conn: sqlite3.Connection, log_id: str, changes: dict) -> dict | None:
+    """Change an eaten item from the laptop. It gets a fresh timestamp, so the
+    phone page takes it over on its next sync (last write wins)."""
+    cur = get_log(conn, log_id)
+    if cur is None:
+        return None
+    entry = {**cur, **{k: v for k, v in changes.items() if k in EDITABLE_LOG_FIELDS}, "updated_at": _now_ms()}
+    upsert_log(conn, entry)
+    conn.commit()
+    return get_log(conn, log_id)
 
 
 def _log_out(r: sqlite3.Row) -> dict:

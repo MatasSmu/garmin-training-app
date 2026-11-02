@@ -163,6 +163,38 @@ def test_import_reports_google_errors(conn, monkeypatch):
     assert sheets.get_setting(conn, "sheet_last_import")["ok"] is False
 
 
+def test_score_read_as_displayed_when_sheets_made_it_a_date():
+    # Lithuanian locale: a typed 8.5 becomes 5 August (serial 46239) but still shows "8.5".
+    rows = [["Weight (kg)", "Date", "Time", "Rating", "Notes"],
+            ["81.9", 46328, 0.3257, 46239, "nenorėjau keltis"],
+            ["81.1", 46327, 0.36, 8, ""],
+            ["80.0", 46326, 0.3, "6.5 / 6:33", ""]]
+    shown = [rows[0], ["81.9", "2026-11-02", "07:49", "8.5", "nenorėjau keltis"],
+             ["81.1", "2026-11-01", "08:38", "8", ""], ["80.0", "2026-10-31", "07:12", "6.5 / 6:33", ""]]
+    entries, _, _ = sheets.parse_rows(rows, "lt_LT", shown)
+    assert sorted((e["date"], e["score"]) for e in entries) == [("2026-10-31", 6.5), ("2026-11-01", 8.0), ("2026-11-02", 8.5)]
+
+
+def test_after_midnight_is_previous_evening_and_second_morning_is_evening():
+    rows = [["Weight (kg)", "Date", "Time", "Rating", "Notes"],
+            ["82.5", "2026-09-30", "00:10", "", "post-midnight 09-29 night"],
+            ["81.3", "2026-09-30", "09:15", "8.5", ""],
+            ["82.4", "2026-09-26", "08:41", "8", ""],
+            ["82.7", "2026-09-26", "13:10", "", ""],
+            ["80.0", "2026-09-27", "07:00", "", ""],
+            ["80.1", "2026-09-27", "09:00", "", "re-weighed"],
+            ["81.0", "2026-09-27", "21:00", "", ""]]
+    entries, skipped, _ = sheets.parse_rows(rows)
+    got = sorted((e["date"], e["slot"], e["time"], e["weight_kg"]) for e in entries)
+    assert got == [
+        ("2026-09-26", "evening", "13:10", 82.7), ("2026-09-26", "morning", "08:41", 82.4),
+        ("2026-09-27", "evening", "21:00", 81.0), ("2026-09-27", "morning", "07:00", 80.0),
+        ("2026-09-29", "evening", "00:10", 82.5), ("2026-09-30", "morning", "09:15", 81.3),
+    ]
+    # 27th: 07:00 morning, 09:00 took the free evening, then 21:00 replaced it.
+    assert [(s["row"], s["reason"]) for s in skipped] == [(7, "two evening weigh-ins on 2026-09-27; kept row 8")]
+
+
 # The athlete's real layout: weight, date, time, score, note -- no header row.
 REAL_ROWS = [
     ["80.4", "2026-09-04", "22:40", "", "(ryte atsisėdimai)"],

@@ -40,6 +40,7 @@ INTERVAL_MINUTES = float(os.environ.get("SHEETS_IMPORT_MINUTES", "15"))
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 API = "https://sheets.googleapis.com/v4/spreadsheets"
 MORNING_BEFORE_HOUR = 14
+NIGHT_UNTIL_HOUR = 4          # a weigh-in before 04:00 belongs to the previous day's evening
 MIN_KG, MAX_KG = 25, 250
 HEADER_SCAN_ROWS = 10
 MAX_SKIPPED_SHOWN = 30
@@ -157,8 +158,11 @@ def _get(url: str, params: dict | None = None) -> dict:
     raise SheetError(f"Google Sheets error {r.status_code}: {msg[:200]}")
 
 
-def fetch(cfg: dict) -> tuple[list[list], str, str]:
-    """(rows, tab title, locale) for the configured sheet."""
+def fetch(cfg: dict) -> tuple[list[list], str, str, list[list]]:
+    """(rows, tab title, locale, displayed rows) for the configured sheet.
+    rows hold real values (dates as serial numbers); displayed rows hold the
+    text as the athlete sees it, used for the score -- Sheets turns a typed
+    8.5 into a date (5 August) under the Lithuanian locale."""
     meta = _get(f"{API}/{cfg['id']}", {"fields": "properties(locale,title),sheets(properties(sheetId,title))"})
     tabs = [s["properties"] for s in meta.get("sheets", [])]
     tab = cfg.get("tab")
@@ -168,7 +172,8 @@ def fetch(cfg: dict) -> tuple[list[list], str, str]:
     rng = quote("'" + tab.replace("'", "''") + "'", safe="")
     data = _get(f"{API}/{cfg['id']}/values/{rng}",
                 {"valueRenderOption": "UNFORMATTED_VALUE", "dateTimeRenderOption": "SERIAL_NUMBER"})
-    return data.get("values", []), tab, meta.get("properties", {}).get("locale", "")
+    shown = _get(f"{API}/{cfg['id']}/values/{rng}", {"valueRenderOption": "FORMATTED_VALUE"})
+    return data.get("values", []), tab, meta.get("properties", {}).get("locale", ""), shown.get("values", [])
 
 
 # ------------------------------------------------------------------ parsing
@@ -349,9 +354,17 @@ def parse_number(v) -> float | None:
     return float(m.group(0).replace(",", ".")) if m else None
 
 
-def parse_rows(rows: list[list], locale: str = "") -> tuple[list[dict], list[dict], dict[str, int]]:
-    """(entries, skipped, {field: header text}). Entries: {date, slot, weight_kg, score, note, time, row}."""
+def parse_rows(rows: list[list], locale: str = "", shown: list[list] | None = None) -> tuple[list[dict], list[dict], dict[str, int]]:
+    """(entries, skipped, {field: header text}). Entries: {date, slot, weight_kg, score, note, time, row}.
+    shown: the same rows as displayed text; the score is read from it when given."""
     h, cols, names = _find_header(rows)
+
+    def score_of(i: int, r: list):
+        if shown is not None and "score" in cols:
+            row = shown[i] if i < len(shown) else []
+            return parse_number(row[cols["score"]] if cols["score"] < len(row) else None)
+        return parse_number(cell(r, "score"))
+
     month_first = locale.startswith("en_US")
     cell = lambda r, f: r[cols[f]] if f in cols and cols[f] < len(r) else None  # noqa: E731
     pending, skipped = [], []
@@ -365,8 +378,13 @@ def parse_rows(rows: list[list], locale: str = "") -> tuple[list[dict], list[dic
         t2, slot = parse_time(cell(r, "time"))
         t = t2 or t
         slot = (parse_slot(cell(r, "slot")) if "slot" in cols else None) or slot
+        auto = False
         if slot is None and t:
-            slot = "morning" if int(t[:2]) < MORNING_BEFORE_HOUR else "evening"
+            if int(t[:2]) < NIGHT_UNTIL_HOUR:     # 00:10 is still the night before: that day's evening
+                d, slot = d - timedelta(days=1), "evening"
+            else:
+                slot = "morning" if int(t[:2]) < MORNING_BEFORE_HOUR else "evening"
+            auto = True
         w = parse_number(cell(r, "weight"))
         if w is None:
             skipped.append({"row": n, "reason": "no weight"})
@@ -376,18 +394,24 @@ def parse_rows(rows: list[list], locale: str = "") -> tuple[list[dict], list[dic
             continue
         note = cell(r, "note")
         pending.append({"date": d.isoformat(), "slot": slot, "time": t, "weight_kg": round(w, 2),
-                        "score": parse_number(cell(r, "score")),
-                        "note": str(note).strip() if note not in (None, "") else None, "row": n})
+                        "score": score_of(n - 1, r),
+                        "note": str(note).strip() if note not in (None, "") else None, "row": n, "auto": auto})
     # Rows without a time or slot: first of the day = morning, second = evening.
+    # Two weigh-ins that both look like mornings (08:41 and 13:10): the later is the evening.
     entries: dict[tuple[str, str], dict] = {}
-    for e in pending:
-        if e["slot"] is None:
+    for e in sorted(pending, key=lambda e: (e["date"], e["time"] or "", e["row"])):
+        auto = e.pop("auto")
+        if e["slot"] is None or (auto and e["slot"] == "morning" and (e["date"], "morning") in entries
+                                 and (e["date"], "evening") not in entries):
             taken = {s for (d, s) in entries if d == e["date"]}
             free = [s for s in store.SLOTS if s not in taken]
             if not free:
                 skipped.append({"row": e["row"], "reason": "a third weigh-in that day (no time to tell which)"})
                 continue
             e["slot"] = free[0]
+        prev = entries.get((e["date"], e["slot"]))
+        if prev is not None:
+            skipped.append({"row": prev["row"], "reason": f"two {e['slot']} weigh-ins on {e['date']}; kept row {e['row']}"})
         entries[(e["date"], e["slot"])] = e          # a later row for the same date + slot wins
     return list(entries.values()), sorted(skipped, key=lambda s: s["row"]), names
 
@@ -429,8 +453,8 @@ def run_import(conn: sqlite3.Connection, source: str = "manual") -> dict:
         cfg = get_setting(conn, "sheet") or {}
         if not cfg.get("id"):
             raise SheetError("No sheet link saved yet.")
-        rows, tab, locale = fetch(cfg)
-        entries, skipped, cols = parse_rows(rows, locale)
+        rows, tab, locale, shown = fetch(cfg)
+        entries, skipped, cols = parse_rows(rows, locale, shown)
         counts = apply_entries(conn, entries)
         parts = [f"{counts['added']} added", f"{counts['updated']} updated", f"{counts['unchanged']} unchanged"]
         if skipped:

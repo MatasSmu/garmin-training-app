@@ -1,35 +1,35 @@
 /* Food & weight phone page -- same tokens and big tap targets as the gym
    logger (gym.css); system fonts so nothing external is needed offline. */
 :root{
-  --bg:#F1F5F6; --surface:#FFFFFF; --surface-2:#E7EEF0; --border:#D2DEE1;
-  --ink:#0F2730; --ink-muted:#52707A; --ink-faint:#8AA3AA;
-  --teal:#0093A8; --teal-strong:#00728A; --teal-soft:#CDEBF0;
-  --accent:#E85A2A; --accent-soft:#FCE0D2;
-  --plan:#6B4FB8; --plan-soft:#E6DFF6;
-  --done:#2E7D4F; --done-soft:#DDF1E4;
+  --bg:#E8F2F6; --surface:#FFFFFF; --surface-2:#EDF5F8; --border:#D2E3EA;
+  --ink:#0B2533; --ink-muted:#46677A; --ink-faint:#86A3B1;
+  --teal:#08789A; --teal-strong:#065E7A; --teal-soft:#D2EBF3;
+  --accent:#E8674A; --accent-soft:#FCE2D9;
+  --plan:#5565CF; --plan-soft:#E2E6FA;
+  --done:#1B8A6B; --done-soft:#DDF1E4;
   --warn:#B25E00; --warn-soft:#FDEBD3;
   --shadow: 0 1px 2px rgba(15,39,48,.06), 0 8px 24px -12px rgba(15,39,48,.18);
   --tap: 56px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0A171C; --surface:#102229; --surface-2:#16303A; --border:#234049;
-    --ink:#DCEAEE; --ink-muted:#8CADB6; --ink-faint:#5A7981;
-    --teal:#2FB4C7; --teal-strong:#57C8D9; --teal-soft:#163A42;
-    --accent:#F08A56; --accent-soft:#3A2A20;
-    --plan:#B29BEF; --plan-soft:#2C2445;
-    --done:#6FCF97; --done-soft:#17352A;
+    --bg:#06202B; --surface:#0C2A37; --surface-2:#113443; --border:#1D4556;
+    --ink:#DDEFF5; --ink-muted:#8FB4C3; --ink-faint:#5D8495;
+    --teal:#3CC2DD; --teal-strong:#6DD4E9; --teal-soft:#123C4B;
+    --accent:#F4937A; --accent-soft:#3A2A20;
+    --plan:#9AA7F3; --plan-soft:#252D4E;
+    --done:#5FD1A8; --done-soft:#17352A;
     --warn:#F2B35E; --warn-soft:#3A2C17;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0A171C; --surface:#102229; --surface-2:#16303A; --border:#234049;
-  --ink:#DCEAEE; --ink-muted:#8CADB6; --ink-faint:#5A7981;
-  --teal:#2FB4C7; --teal-strong:#57C8D9; --teal-soft:#163A42;
-  --accent:#F08A56; --accent-soft:#3A2A20;
-  --plan:#B29BEF; --plan-soft:#2C2445;
-  --done:#6FCF97; --done-soft:#17352A;
+  --bg:#06202B; --surface:#0C2A37; --surface-2:#113443; --border:#1D4556;
+  --ink:#DDEFF5; --ink-muted:#8FB4C3; --ink-faint:#5D8495;
+  --teal:#3CC2DD; --teal-strong:#6DD4E9; --teal-soft:#123C4B;
+  --accent:#F4937A; --accent-soft:#3A2A20;
+  --plan:#9AA7F3; --plan-soft:#252D4E;
+  --done:#5FD1A8; --done-soft:#17352A;
   --warn:#F2B35E; --warn-soft:#3A2C17;
 }
 
@@ -41,7 +41,7 @@ body{
   padding-bottom:calc(40px + env(safe-area-inset-bottom));
   -webkit-tap-highlight-color:transparent;
 }
-.mono{font-family:ui-monospace, "SFMono-Regular", "Roboto Mono", monospace; font-variant-numeric:tabular-nums;}
+.mono{font-family:inherit; font-weight:700; letter-spacing:-.01em; font-variant-numeric:tabular-nums;}
 button{font:inherit; color:inherit; cursor:pointer; touch-action:manipulation;}
 input, select, textarea{font:inherit; color:var(--ink);}
 [hidden]{display:none !important;}
@@ -199,3 +199,12 @@ input, select, textarea{font:inherit; color:var(--ink);}
   display:flex; align-items:center; justify-content:space-between; gap:10px; max-width:600px; margin:0 auto;
 }
 .toast button{border:0; background:transparent; color:var(--teal-soft); font-weight:700; min-height:40px; padding:0 8px;}
+
+/* Watercolour washes (sea palette) behind the page, like the main app. */
+body::before{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(70% 40% at 0% 0%, rgba(43,179,200,.22), transparent 70%),
+    radial-gradient(60% 40% at 100% 8%, rgba(8,120,154,.14), transparent 70%),
+    radial-gradient(60% 35% at 92% 100%, rgba(233,184,114,.20), transparent 70%);
+}

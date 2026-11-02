@@ -6,20 +6,20 @@
 <title>Training</title>
 <link rel="icon" href="/static/icon-192.png">
 <link rel="manifest" href="/static/manifest.json" crossorigin="use-credentials">
-<meta name="theme-color" content="#0093A8">
+<meta name="theme-color" content="#08789A">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,380;0,9..144,480;0,9..144,600;0,9..144,680;1,9..144,480;1,9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
 <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/tracks.css">
 </head>
-<body>
+<body data-name="{{ATHLETE_NAME}}" class="{{BODY_CLASS}}">
 <div class="page">
   <header class="masthead">
     <div class="masthead-title">
-      <p class="eyebrow">Personal training record</p>
-      <h1>Training</h1>
+      <p class="eyebrow" id="todayLine">Training</p>
+      <h1 id="greeting">Hello</h1>
     </div>
     <div class="sync-box">
       <button type="button" class="sync-btn" id="syncBtn">
@@ -43,30 +43,42 @@
   </nav>
 
   <section id="tab-dashboard" class="tab-section active">
-    <div class="hero-stats" id="dashboardStats" aria-label="Recent training summary">
-      <div class="stat-tile">
-        <span class="stat-value mono" id="statLoad7">—</span>
-        <span class="stat-label">Sessions, last 7 days</span>
+    <div class="dash-tiles" id="dashboardStats" aria-label="Today and the last 7 days">
+      <div class="dash-tile tone-coral">
+        <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.6 14.2a4.4 4.4 0 0 0 6.8 0M9.3 9.6h.01M14.7 9.6h.01"/></svg></span>
+        <span class="tile-label">How you feel</span>
+        <span class="tile-value" id="statFeel">—</span>
+        <span class="tile-sub" id="statFeelSub">Rating from your check-ins</span>
       </div>
-      <div class="stat-tile">
-        <span class="stat-value mono" id="statMinutes7">—</span>
-        <span class="stat-label">Minutes, last 7 days</span>
+      <div class="dash-tile tone-ocean">
+        <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M8.7 10a4.6 4.6 0 0 1 6.6 0M12 10.2l1.3-1.7"/></svg></span>
+        <span class="tile-label">Weight</span>
+        <span class="tile-value" id="statWeight">—</span>
+        <span class="tile-sub" id="statWeightLabel">Trend weight</span>
       </div>
-      <div class="stat-tile accent">
-        <span class="stat-value mono" id="statStreak">—</span>
-        <span class="stat-label">Current streak</span>
+      <div class="dash-tile tone-indigo">
+        <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1z"/></svg></span>
+        <span class="tile-label">Sleep</span>
+        <span class="tile-value" id="statSleep">—</span>
+        <span class="tile-sub">Average, last 7 nights</span>
       </div>
-      <div class="stat-tile">
-        <span class="stat-value mono" id="statSleep">—</span>
-        <span class="stat-label">Avg sleep, last 7 nights</span>
+      <div class="dash-tile tone-sand">
+        <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3.5v7.5a2 2 0 0 0 2 2v7.5M5 3.5V8M9 3.5V8M16.5 20.5v-17c-2 1.4-3 4-3 7h3"/></svg></span>
+        <span class="tile-label">Protein</span>
+        <span class="tile-value" id="statProtein">—</span>
+        <span class="tile-sub" id="statProteinLabel">Protein today</span>
       </div>
-      <div class="stat-tile">
-        <span class="stat-value mono" id="statWeight">—</span>
-        <span class="stat-label" id="statWeightLabel">Trend weight</span>
+      <div class="dash-tile tone-aqua">
+        <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5v14M12 3.5c3.6 2.6 5.6 7.2 5.6 12.5H12M4 20c2.2 1 4.6 1 7 0s5-1 7.5 0"/></svg></span>
+        <span class="tile-label">Training</span>
+        <span class="tile-value"><span id="statLoad7">—</span> <small>sessions</small></span>
+        <span class="tile-sub"><span id="statMinutes7">—</span> · last 7 days</span>
       </div>
-      <div class="stat-tile">
-        <span class="stat-value mono" id="statProtein">—</span>
-        <span class="stat-label" id="statProteinLabel">Protein today</span>
+      <div class="dash-tile tone-sea">
+        <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h3.5l2.5-6 4 12 2.5-6H21"/></svg></span>
+        <span class="tile-label">Streak</span>
+        <span class="tile-value" id="statStreak">—</span>
+        <span class="tile-sub">Training or rest days in a row</span>
       </div>
     </div>
     <div class="panel">

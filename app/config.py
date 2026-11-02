@@ -31,3 +31,8 @@ if not APP_USERNAME or not APP_PASSWORD:
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY") or None
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+
+# Look of the web app: the name in the greeting, and an optional personal
+# background photo (kept in data/, never in git).
+ATHLETE_NAME = os.environ.get("ATHLETE_NAME", "Matas")
+BACKGROUND_PHOTO = Path(os.environ.get("BACKGROUND_PHOTO") or PROJECT_ROOT / "data" / "background.jpg")

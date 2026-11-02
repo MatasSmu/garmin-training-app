@@ -41,6 +41,28 @@
       .join("");
   }
 
+  // Header: "Good morning, Matas" and today's date.
+  function renderGreeting() {
+    var now = new Date(), h = now.getHours();
+    var name = (document.body.dataset.name || "").trim();
+    var part = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    document.getElementById("greeting").textContent = part + (name && name.indexOf("{{") < 0 ? ", " + name : "");
+    document.getElementById("todayLine").textContent =
+      now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) + " · Training";
+  }
+  renderGreeting();
+
+  function renderFeel(c) {
+    var v = document.getElementById("statFeel"), sub = document.getElementById("statFeelSub");
+    if (!c || !c.last_score) { v.textContent = "—"; sub.textContent = "Add a rating on the phone or in your sheet"; return; }
+    var ls = c.last_score;
+    v.textContent = (Math.round(ls.score * 10) / 10) + "";
+    var when = ls.date === new Date().toISOString().slice(0, 10) ? "today" :
+      new Date(ls.date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    sub.textContent = ls.slot + " " + when + (c.avg_score_7d != null && c.scores_7d > 1 ? " · 7-day avg " + c.avg_score_7d : "");
+    if (c.note) sub.title = c.note;
+  }
+
   function loadDashboard() {
     fetch("/api/dashboard/summary")
       .then(function (r) { return r.json(); })
@@ -53,6 +75,7 @@
         document.getElementById("statSleep").textContent = sleep != null ? sleep.toFixed(1) + "h" : "—";
         renderJournalList(document.getElementById("dashboardJournal"), d.recent_journal);
         var n = d.nutrition;
+        renderFeel(n && n.checkin);
         if (n) {
           document.getElementById("statWeight").textContent = n.trend_kg != null ? n.trend_kg.toFixed(1) + " kg" : "—";
           document.getElementById("statWeightLabel").textContent = "Trend weight" +

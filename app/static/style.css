@@ -1,87 +1,146 @@
+/* "Fresh light" sea palette: ocean blue + aqua, sand, a coral sail accent;
+   frosted-glass cards over watercolour washes (and the athlete's own photo
+   when data/background.jpg exists -- see main.py). Token names are kept so
+   charts and every tab follow automatically. */
 :root{
-  --bg:#F1F5F6;
+  --bg:#E8F2F6;
   --surface:#FFFFFF;
-  --surface-2:#E7EEF0;
-  --border:#D2DEE1;
-  --ink:#0F2730;
-  --ink-muted:#52707A;
-  --ink-faint:#8AA3AA;
-  --teal:#0093A8;
-  --teal-strong:#00728A;
-  --teal-soft:#CDEBF0;
-  --accent:#E85A2A;
-  --accent-soft:#FCE0D2;
-  --plan:#6B4FB8;
-  --plan-soft:#E6DFF6;
-  --block:#B42318;
-  --block-soft:#FBE3E0;
-  --done:#2E7D4F;
-  --shadow: 0 1px 2px rgba(15,39,48,.06), 0 8px 24px -12px rgba(15,39,48,.18);
+  --surface-2:#EDF5F8;
+  --border:#D2E3EA;
+  --ink:#0B2533;
+  --ink-muted:#46677A;
+  --ink-faint:#86A3B1;
+  --teal:#08789A;          /* ocean -- white text on it passes AA */
+  --teal-strong:#065E7A;
+  --teal-soft:#D2EBF3;
+  --aqua:#2BB3C8;
+  --sand:#E9B872;
+  --accent:#E8674A;        /* coral sail */
+  --accent-soft:#FCE2D9;
+  --plan:#5565CF;
+  --plan-soft:#E2E6FA;
+  --block:#C0352A;
+  --block-soft:#FBE4E1;
+  --done:#1B8A6B;
+  --glass:rgba(255,255,255,.76);
+  --glass-strong:rgba(255,255,255,.9);
+  --glass-border:rgba(255,255,255,.75);
+  --wash-1:rgba(43,179,200,.34);
+  --wash-2:rgba(8,120,154,.22);
+  --wash-3:rgba(233,184,114,.30);
+  --wash-4:rgba(232,103,74,.14);
+  --veil-top:rgba(232,242,246,.42);
+  --veil-bottom:rgba(232,242,246,.86);
+  --radius:20px;
+  --shadow: 0 1px 2px rgba(11,37,51,.05), 0 12px 32px -16px rgba(8,78,104,.28);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0A171C;
-    --surface:#102229;
-    --surface-2:#16303A;
-    --border:#234049;
-    --ink:#DCEAEE;
-    --ink-muted:#8CADB6;
-    --ink-faint:#5A7981;
-    --teal:#2FB4C7;
-    --teal-strong:#57C8D9;
-    --teal-soft:#163A42;
-    --accent:#F08A56;
-    --accent-soft:#3A2A20;
-    --plan:#B29BEF;
-    --plan-soft:#2C2445;
+    --bg:#06202B;
+    --surface:#0C2A37;
+    --surface-2:#113443;
+    --border:#1D4556;
+    --ink:#DDEFF5;
+    --ink-muted:#8FB4C3;
+    --ink-faint:#5D8495;
+    --teal:#3CC2DD;
+    --teal-strong:#6DD4E9;
+    --teal-soft:#123C4B;
+    --aqua:#3CC2DD;
+    --sand:#E7B977;
+    --accent:#F4937A;
+    --accent-soft:#3A2620;
+    --plan:#9AA7F3;
+    --plan-soft:#252D4E;
     --block:#F2877B;
     --block-soft:#3D1F1C;
-    --done:#6FCF97;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
+    --done:#5FD1A8;
+    --glass:rgba(10,38,50,.74);
+    --glass-strong:rgba(10,38,50,.9);
+    --glass-border:rgba(255,255,255,.08);
+    --wash-1:rgba(43,179,200,.20);
+    --wash-2:rgba(16,90,140,.30);
+    --wash-3:rgba(233,184,114,.10);
+    --wash-4:rgba(232,103,74,.10);
+    --veil-top:rgba(6,32,43,.55);
+    --veil-bottom:rgba(6,32,43,.9);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0A171C;
-  --surface:#102229;
-  --surface-2:#16303A;
-  --border:#234049;
-  --ink:#DCEAEE;
-  --ink-muted:#8CADB6;
-  --ink-faint:#5A7981;
-  --teal:#2FB4C7;
-  --teal-strong:#57C8D9;
-  --teal-soft:#163A42;
-  --accent:#F08A56;
-  --accent-soft:#3A2A20;
-  --plan:#B29BEF;
-  --plan-soft:#2C2445;
+  --bg:#06202B;
+  --surface:#0C2A37;
+  --surface-2:#113443;
+  --border:#1D4556;
+  --ink:#DDEFF5;
+  --ink-muted:#8FB4C3;
+  --ink-faint:#5D8495;
+  --teal:#3CC2DD;
+  --teal-strong:#6DD4E9;
+  --teal-soft:#123C4B;
+  --aqua:#3CC2DD;
+  --sand:#E7B977;
+  --accent:#F4937A;
+  --accent-soft:#3A2620;
+  --plan:#9AA7F3;
+  --plan-soft:#252D4E;
   --block:#F2877B;
   --block-soft:#3D1F1C;
-  --done:#6FCF97;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
+  --done:#5FD1A8;
+  --glass:rgba(10,38,50,.74);
+  --glass-strong:rgba(10,38,50,.9);
+  --glass-border:rgba(255,255,255,.08);
+  --wash-1:rgba(43,179,200,.20);
+  --wash-2:rgba(16,90,140,.30);
+  --wash-3:rgba(233,184,114,.10);
+  --wash-4:rgba(232,103,74,.10);
+  --veil-top:rgba(6,32,43,.55);
+  --veil-bottom:rgba(6,32,43,.9);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
 }
 
 *{box-sizing:border-box;}
+html{background:var(--bg);}
 body{
-  background:var(--bg);
+  margin:0; min-height:100vh;
+  background:transparent;
   color:var(--ink);
-  font-family:"Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family:"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3{font-family:"Fraunces", Georgia, serif; text-wrap:balance; margin:0;}
+/* Fixed backdrop: a veil for readability, the photo (if any), then soft
+   watercolour washes of aqua, ocean, sand and coral. */
+body::before{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:
+    linear-gradient(180deg, var(--veil-top) 0, var(--veil-bottom) 520px),
+    radial-gradient(60% 45% at 8% 6%, var(--wash-1), transparent 70%),
+    radial-gradient(55% 50% at 96% 12%, var(--wash-2), transparent 72%),
+    radial-gradient(50% 40% at 85% 92%, var(--wash-3), transparent 70%),
+    radial-gradient(45% 35% at 12% 88%, var(--wash-4), transparent 70%),
+    var(--bg);
+}
+body.has-photo::before{
+  background:
+    linear-gradient(180deg, var(--veil-top) 0, var(--veil-bottom) 520px),
+    var(--bg-photo) center 30% / cover no-repeat,
+    var(--bg);
+}
+h1,h2,h3{font-family:"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif; text-wrap:balance; margin:0; letter-spacing:-.015em;}
 .mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace; font-variant-numeric:tabular-nums;}
 
-.page{max-width:1080px; margin:0 auto; padding:40px 24px 64px;}
+.page{max-width:1120px; margin:0 auto; padding:36px 24px 64px;}
 
 .masthead{
   display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
-  gap:16px; padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--border);
+  gap:16px; margin-bottom:18px;
 }
 .masthead-title .eyebrow{
-  font-family:"IBM Plex Mono", monospace; font-size:11.5px; letter-spacing:.09em; text-transform:uppercase;
-  color:var(--teal-strong); margin:0 0 8px;
+  font-size:13px; font-weight:600; letter-spacing:.02em;
+  color:var(--teal-strong); margin:0 0 6px;
 }
-.masthead-title h1{font-size:clamp(28px,4.5vw,38px); font-weight:600; letter-spacing:-.01em; color:var(--ink);}
+.masthead-title h1{font-size:clamp(28px,4.6vw,40px); font-weight:800; letter-spacing:-.025em; color:var(--ink);}
+body.has-photo .masthead-title h1, body.has-photo .masthead-title .eyebrow{text-shadow:0 1px 12px var(--veil-bottom);}
 
 /* ---- sync button (masthead, top right) ---- */
 .sync-box{display:flex; flex-direction:column; align-items:flex-end; gap:6px; margin-left:auto;}
@@ -99,42 +158,96 @@ h1,h2,h3{font-family:"Fraunces", Georgia, serif; text-wrap:balance; margin:0;}
 @media (prefers-reduced-motion: reduce){ .sync-btn.busy .sync-icon{animation:none;} }
 .sync-status{font-size:12px; color:var(--ink-muted); text-align:right; max-width:340px;}
 .sync-status.err{color:var(--block);}
-@media (max-width:640px){ .sync-box{align-items:flex-start; margin-left:0;} .sync-status{text-align:left;} }
-
-/* ---- tab nav ---- */
-.tab-nav{display:flex; gap:6px; margin-bottom:24px; flex-wrap:wrap;}
-.tab-btn{
-  font:inherit; font-size:13.5px; font-weight:600; color:var(--ink-muted);
-  background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
-  padding:8px 16px; cursor:pointer;
+@media (max-width:640px){
+  .page{padding:22px 16px 48px;}
+  .masthead{align-items:center; margin-bottom:14px;}
+  .sync-box{align-items:flex-start; margin-left:0;}
+  .sync-status{text-align:left;}
+  .sync-btn{padding:7px 14px;}
+  .tab-nav{margin-left:-4px; margin-right:-4px; top:6px;}
+  .panel{padding:18px 16px;}
 }
-.tab-btn.active{background:var(--teal); border-color:var(--teal); color:#fff;}
+.sync-btn{box-shadow:0 6px 18px -8px var(--teal);}
+
+/* ---- tab nav: a frosted bar; one scrollable row on the phone ---- */
+.tab-nav{
+  display:flex; gap:4px; margin-bottom:24px; padding:5px;
+  background:var(--glass); border:1px solid var(--glass-border); border-radius:999px;
+  -webkit-backdrop-filter:blur(14px) saturate(1.3); backdrop-filter:blur(14px) saturate(1.3);
+  box-shadow:var(--shadow);
+  overflow-x:auto; scrollbar-width:none; scroll-snap-type:x proximity;
+  position:sticky; top:10px; z-index:20;
+}
+.tab-nav::-webkit-scrollbar{display:none;}
+.tab-btn{
+  flex:0 0 auto; scroll-snap-align:start;
+  font:inherit; font-size:14px; font-weight:600; color:var(--ink-muted);
+  background:transparent; border:0; border-radius:999px;
+  padding:9px 16px; cursor:pointer; white-space:nowrap;
+  transition:background .15s, color .15s;
+}
+.tab-btn:hover{color:var(--ink); background:var(--teal-soft);}
+.tab-btn.active{background:linear-gradient(135deg, var(--teal), var(--aqua)); color:#fff; box-shadow:0 4px 14px -6px var(--teal);}
 .tab-btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
 .tab-section{display:none;}
 .tab-section.active{display:block;}
 
-/* ---- hero stats ---- */
+/* ---- dashboard tiles: one card each, icon + label + big number ---- */
+.dash-tiles{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px;}
+.dash-tile{
+  --tone:var(--teal);
+  position:relative; overflow:hidden;
+  display:flex; flex-direction:column; gap:4px; padding:18px 18px 16px;
+  background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3); backdrop-filter:blur(14px) saturate(1.3);
+  box-shadow:var(--shadow);
+}
+.dash-tile::after{   /* a watercolour wash in the tile's own colour */
+  content:""; position:absolute; right:-30%; top:-45%; width:80%; height:120%; pointer-events:none;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--tone) 22%, transparent), transparent);
+}
+.tone-coral{--tone:var(--accent);}
+.tone-ocean{--tone:var(--teal);}
+.tone-indigo{--tone:var(--plan);}
+.tone-sand{--tone:var(--sand);}
+.tone-aqua{--tone:var(--aqua);}
+.tone-sea{--tone:var(--done);}
+.tile-icon{
+  width:38px; height:38px; border-radius:12px; display:grid; place-items:center; margin-bottom:6px;
+  color:var(--tone); background:color-mix(in srgb, var(--tone) 16%, transparent);
+}
+.tile-icon svg{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
+.tile-label{font-size:12.5px; font-weight:700; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.06em;}
+.tile-value{font-size:clamp(24px,3vw,30px); font-weight:800; letter-spacing:-.02em; color:var(--ink); line-height:1.15; font-variant-numeric:tabular-nums;}
+.tile-value small{font-size:14px; font-weight:600; color:var(--ink-muted); letter-spacing:0;}
+.tile-sub{font-size:12.5px; color:var(--ink-muted); line-height:1.35;}
+@media (max-width:760px){ .dash-tiles{grid-template-columns:repeat(2,1fr); gap:10px;} .dash-tile{padding:14px;} }
+
+/* ---- hero stats (Nutrition, Gym and other tabs): same card look ---- */
 .hero-stats{
-  display:grid; grid-template-columns:repeat(3,1fr); gap:1px;
-  background:var(--border); border:1px solid var(--border); border-radius:14px;
-  overflow:hidden; margin-bottom:24px; box-shadow:var(--shadow);
+  display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px;
 }
-.stat-tile{background:var(--surface); padding:20px 16px; display:flex; flex-direction:column; gap:6px;}
-.stat-tile.accent{background:var(--teal-soft);}
+.stat-tile{
+  padding:16px; display:flex; flex-direction:column; gap:6px;
+  background:var(--glass-strong); border:1px solid var(--border); border-radius:16px;
+}
+.stat-tile.accent{background:var(--teal-soft); border-color:transparent;}
 .stat-value{
-  font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:clamp(18px,2.4vw,24px);
-  color:var(--ink); line-height:1.2;
+  font-weight:800; font-size:clamp(18px,2.4vw,24px); letter-spacing:-.01em;
+  color:var(--ink); line-height:1.2; font-variant-numeric:tabular-nums;
 }
+.stat-value.mono{font-family:inherit;}
 .stat-tile.accent .stat-value{color:var(--teal-strong);}
 .stat-label{font-size:12px; color:var(--ink-muted); letter-spacing:.01em;}
-@media (max-width:760px){ .hero-stats{grid-template-columns:repeat(2,1fr);} }
+@media (max-width:760px){ .hero-stats{grid-template-columns:repeat(2,1fr); gap:10px;} }
 
-/* ---- panels ---- */
+/* ---- panels: frosted cards ---- */
 .panel{
-  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius);
+  -webkit-backdrop-filter:blur(16px) saturate(1.3); backdrop-filter:blur(16px) saturate(1.3);
   padding:24px; margin-bottom:24px; box-shadow:var(--shadow);
 }
-.panel h2{font-size:19px; font-weight:600; margin-bottom:4px;}
+.panel h2{font-size:19px; font-weight:700; margin-bottom:4px;}
 .panel-sub{color:var(--ink-muted); font-size:13px; margin:0 0 16px;}
 
 /* ---- log table (reused for sessions) ---- */
@@ -153,7 +266,7 @@ thead th{
 }
 thead th.num, td.num{text-align:right;}
 tbody td{padding:8px 12px; border-bottom:1px solid var(--border); white-space:nowrap; font-family:"IBM Plex Mono",monospace;}
-tbody td.loc-cell{font-family:"Public Sans",sans-serif; font-weight:500;}
+tbody td.loc-cell{font-family:"Plus Jakarta Sans",sans-serif; font-weight:500;}
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover{background:var(--surface-2);}
 
@@ -169,7 +282,7 @@ tbody tr:hover{background:var(--surface-2);}
 }
 .btn-primary{
   font:inherit; font-size:13.5px; font-weight:600; color:#fff; background:var(--teal);
-  border:1px solid var(--teal); border-radius:8px; padding:8px 18px; cursor:pointer; align-self:flex-start;
+  border:1px solid var(--teal); border-radius:999px; padding:8px 18px; cursor:pointer; align-self:flex-start; text-decoration:none; display:inline-block;
 }
 .btn-primary:hover{background:var(--teal-strong);}
 .journal-list{display:flex; flex-direction:column; gap:10px;}

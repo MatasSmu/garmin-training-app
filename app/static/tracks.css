@@ -72,9 +72,9 @@ body.wide .page{max-width:1440px;}
 .tk-table tbody tr.clickable{cursor:pointer;}
 .tk-table tbody tr.clickable:hover td{background:var(--surface-2);}
 .tk-table tbody tr.sel td{background:var(--teal-soft);}
-.tk-table td.txt{font-family:"Public Sans",sans-serif;}
+.tk-table td.txt{font-family:"Plus Jakarta Sans",sans-serif;}
 .tk-table td .sub{color:var(--ink-faint); font-size:11.5px;}
-.tk-table .pill{display:inline-block; font-family:"Public Sans",sans-serif; font-size:11px; font-weight:600; padding:1px 7px; border-radius:999px; background:var(--surface-2); color:var(--ink-muted); margin-right:3px;}
+.tk-table .pill{display:inline-block; font-family:"Plus Jakarta Sans",sans-serif; font-size:11px; font-weight:600; padding:1px 7px; border-radius:999px; background:var(--surface-2); color:var(--ink-muted); margin-right:3px;}
 .tk-table .ok{color:var(--done); font-weight:600;}
 .tk-table .bad{color:var(--block); font-weight:600;}
 .tk-key{display:inline-block; width:12px; height:3px; border-radius:2px; vertical-align:middle; margin-right:6px;}
@@ -144,7 +144,7 @@ body.wide .page{max-width:1440px;}
 .tk-form .row-actions{grid-column:1 / -1; display:flex; gap:8px; align-items:center;}
 .tk-gear-pick{display:flex; flex-wrap:wrap; gap:6px;}
 .tk-gear-pick label{flex-direction:row; align-items:center; gap:6px; font-size:12.5px; color:var(--ink); background:var(--surface-2); padding:5px 9px; border-radius:8px; border:1px solid var(--border);}
-details.panel > summary{cursor:pointer; font-family:"Fraunces",Georgia,serif; font-size:19px; font-weight:600; list-style:none;}
+details.panel > summary{cursor:pointer; font-family:"Plus Jakarta Sans",sans-serif; font-size:19px; font-weight:600; list-style:none;}
 details.panel > summary::-webkit-details-marker{display:none;}
 details.panel > summary::after{content:" +"; color:var(--ink-faint);}
 details.panel[open] > summary::after{content:" \2212";}
@@ -154,7 +154,7 @@ details.panel[open] > summary{margin-bottom:14px;}
 .tk-kv dt{color:var(--ink-muted);}
 .tk-kv dd{margin:0; font-family:"IBM Plex Mono",monospace;}
 
-.tk-cmp th:first-child, .tk-cmp td:first-child{position:sticky; left:0; background:var(--surface); font-family:"Public Sans",sans-serif; text-align:left;}
+.tk-cmp th:first-child, .tk-cmp td:first-child{position:sticky; left:0; background:var(--surface); font-family:"Plus Jakarta Sans",sans-serif; text-align:left;}
 .tk-cmp td.best{color:var(--teal-strong); font-weight:700;}
 .tk-cmp-maps{display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;}
 
@@ -165,7 +165,7 @@ details.panel[open] > summary{margin-bottom:14px;}
 .tk-hud{background:rgba(255,255,255,.8); background:color-mix(in srgb, var(--surface) 80%, transparent);
   -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); color:var(--ink);
   border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
-  padding:9px 11px 8px; font:12px "Public Sans",sans-serif; width:188px; cursor:default;}
+  padding:9px 11px 8px; font:12px "Plus Jakarta Sans",sans-serif; width:188px; cursor:default;}
 .tk-hud-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px 12px;}
 .tk-hud .m{display:flex; flex-direction:column; min-width:0;}
 .tk-hud .l{font-size:10.5px; font-weight:600; letter-spacing:.02em; color:var(--ink-muted); white-space:nowrap;}
@@ -175,7 +175,7 @@ details.panel[open] > summary{margin-bottom:14px;}
 .tk-hud .s{font-size:10.5px; color:var(--ink-faint); min-height:1.2em;}
 .tk-hud-wind{display:flex; gap:6px; align-items:center; margin-top:6px; padding-top:6px; border-top:1px solid var(--border); color:var(--ink-muted);}
 .tk-hud-wind svg{width:22px; height:22px; color:var(--ink); flex:none;}
-.leaflet-container{font-family:"Public Sans",sans-serif;}
+.leaflet-container{font-family:"Plus Jakarta Sans",sans-serif;}
 .tk-placing .leaflet-container{cursor:crosshair;}
 .tk-empty{padding:36px 12px; text-align:center; color:var(--ink-muted); font-size:14px;}
 

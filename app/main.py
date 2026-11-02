@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from app import config
 from app.api import (
     calendar, coach, dashboard, gear, gym, journal, metrics, nutrition, plans, sailing, sessions, sync, tracks,
 )
@@ -72,4 +74,19 @@ def index():
     for name in ("app.js", "style.css", "tracks-core.js", "tracks-detail.js", "tracks.js", "tracks.css", "gym-analysis.js", "plans.js",
                  "weight-chart.js", "nutrition.js"):
         html = _versioned(html, name)
+    photo = config.BACKGROUND_PHOTO
+    html = html.replace("{{ATHLETE_NAME}}", escape(config.ATHLETE_NAME))
+    html = html.replace("{{BODY_CLASS}}", "has-photo" if photo.exists() else "")
+    if photo.exists():   # ?v= so a replaced photo shows at once
+        css = f':root{{--bg-photo:url("/background.jpg?v={int(photo.stat().st_mtime)}")}}'
+        html = html.replace("</head>", f"<style>{css}</style>\n</head>", 1)
     return HTMLResponse(html)
+
+
+@app.get("/background.jpg", include_in_schema=False)
+def background_photo():
+    """The athlete's own photo behind the app (data/background.jpg, not in git)."""
+    if not config.BACKGROUND_PHOTO.exists():
+        return Response(status_code=404)
+    return FileResponse(config.BACKGROUND_PHOTO, media_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})

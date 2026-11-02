@@ -590,6 +590,29 @@ def dashboard_summary(conn: sqlite3.Connection, today: date | None = None) -> di
         "trend_kg": w["trend_kg"], "rate_kg_week": w["rate_kg_week"], "status": w["status"],
         "status_label": w["status_label"], "protein_today_g": d["protein_g"], "kcal_today": d["kcal"],
         "protein_target_g": t["protein_g"], "kcal_min": t["kcal_min"], "kcal_max": t["kcal_max"],
+        "checkin": latest_checkin(conn, today),
+    }
+
+
+def latest_checkin(conn: sqlite3.Connection, today: date | None = None) -> dict | None:
+    """The newest weigh-in with its score / note, plus the average score of the
+    last 7 days -- the dashboard's "How you feel" tile."""
+    today = today or _today()
+    row = conn.execute(
+        "SELECT date, slot, weight_kg, score, note, time FROM weight_entries "
+        "ORDER BY date DESC, CASE slot WHEN 'evening' THEN 0 ELSE 1 END LIMIT 1").fetchone()
+    if row is None:
+        return None
+    last_score = conn.execute(
+        "SELECT date, slot, score FROM weight_entries WHERE score IS NOT NULL "
+        "ORDER BY date DESC, CASE slot WHEN 'evening' THEN 0 ELSE 1 END LIMIT 1").fetchone()
+    avg = conn.execute("SELECT AVG(score), COUNT(score) FROM weight_entries WHERE score IS NOT NULL AND date > ?",
+                       ((today - timedelta(days=7)).isoformat(),)).fetchone()
+    return {
+        **dict(row),
+        "last_score": dict(last_score) if last_score else None,
+        "avg_score_7d": round(avg[0], 1) if avg[0] is not None else None,
+        "scores_7d": avg[1],
     }
 
 

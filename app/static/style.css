@@ -396,4 +396,9 @@ tbody tr:hover{background:var(--surface-2);}
 .sheet-form input[type="text"]{flex:1 1 260px; min-height:36px; border:1px solid var(--border); border-radius:8px; padding:4px 10px;
   background:var(--surface); color:var(--ink); font:inherit; min-width:0;}
 .sheet-form input.sheet-tab{flex:0 1 150px;}
-.sheet-form .btn-primary{align-self:auto;}
+.sheet-form .btn-primary, .sheet-conflicts .btn-primary{align-self:auto;}
+.sheet-mode{margin:10px 0; font-size:13.5px;}
+.sheet-mode select{min-height:34px; border:1px solid var(--border); border-radius:8px; padding:2px 8px; background:var(--surface); color:var(--ink); font:inherit;}
+.sheet-conflicts{margin-top:8px;}
+.sheet-conflicts ul{margin:6px 0 10px; padding-left:18px; font-size:13.5px;}
+.sheet-conflicts li{margin:6px 0;}

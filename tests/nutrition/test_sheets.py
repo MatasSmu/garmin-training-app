@@ -92,7 +92,7 @@ def _entry(**kw):
 
 def test_import_adds_then_only_changed_rows_and_keeps_app_edits(conn):
     assert sheets.apply_entries(conn, [_entry(), _entry(slot="evening", weight_kg=82.3)]) == \
-        {"added": 2, "updated": 0, "unchanged": 0}
+        {"added": 2, "updated": 0, "unchanged": 0, "conflicts": 0}
     assert sheets.apply_entries(conn, [_entry(), _entry(slot="evening", weight_kg=82.3)])["unchanged"] == 2
     # The athlete corrects the morning in the app: an unchanged sheet row must not undo that.
     store.upsert_weight(conn, "2026-11-01", "morning", 81.0)
@@ -100,10 +100,64 @@ def test_import_adds_then_only_changed_rows_and_keeps_app_edits(conn):
     assert sheets.apply_entries(conn, [_entry()])["unchanged"] == 1
     row = next(r for r in store.list_weights(conn) if r["slot"] == "morning")
     assert (row["weight_kg"], row["score"], row["note"], row["time"]) == (81.0, 7.0, "ok", "07:10")
-    # Changing the row in the sheet does win.
-    assert sheets.apply_entries(conn, [_entry(score=8.0)])["updated"] == 1
+    # Changing the row in the sheet: asked about by default, taken in the 'sheet' mode.
+    assert sheets.apply_entries(conn, [_entry(score=8.0)])["conflicts"] == 1
+    assert sheets.apply_entries(conn, [_entry(score=8.0)], mode="sheet")["updated"] == 1
     row = next(r for r in store.list_weights(conn) if r["slot"] == "morning")
     assert (row["weight_kg"], row["score"]) == (81.4, 8.0)
+
+
+def test_differences_ask_then_resolve_or_follow_the_mode(client, conn):
+    # The app already has 16 Sep evening typed in as 81.3 (no time / score / note).
+    store.upsert_weight(conn, "2026-09-16", "evening", 81.3)
+    store.upsert_weight(conn, "2026-09-17", "evening", 80.5)
+    store.upsert_weight(conn, "2026-09-18", "evening", 80.9)
+    conn.commit()
+    sheet = [_entry(date="2026-09-16", slot="evening", weight_kg=81.5, time="22:26", score=None, note="pavargęs"),
+             _entry(date="2026-09-17", slot="evening", weight_kg=81.2, time="22:07", score=None, note=None),
+             _entry(date="2026-09-18", slot="evening", weight_kg=80.9, time="22:00", score=8.0, note="ok")]
+    counts = sheets.apply_entries(conn, sheet)     # default mode: ask
+    assert (counts["conflicts"], counts["updated"]) == (2, 1)
+    rows = {r["date"]: r for r in client.get("/api/nutrition/checkins?days=3650").json()}
+    # Kept the app's weight, but empty fields were filled from the sheet.
+    assert (rows["2026-09-16"]["weight_kg"], rows["2026-09-16"]["time"], rows["2026-09-16"]["note"]) == (81.3, "22:26", "pavargęs")
+    assert (rows["2026-09-18"]["score"], rows["2026-09-18"]["note"]) == (8.0, "ok")
+    st = client.get("/api/nutrition/sheet").json()
+    assert st["conflict_mode"] == "ask"
+    assert st["conflicts"] == [
+        {"date": "2026-09-16", "slot": "evening", "fields": [{"field": "weight_kg", "app": 81.3, "sheet": 81.5}]},
+        {"date": "2026-09-17", "slot": "evening", "fields": [{"field": "weight_kg", "app": 80.5, "sheet": 81.2}]}]
+    # Re-importing the same sheet keeps asking without changing anything.
+    assert sheets.apply_entries(conn, sheet)["conflicts"] == 2
+
+    r = client.post("/api/nutrition/sheet/conflicts/resolve", json={"use": "sheet", "date": "2026-09-16", "slot": "evening"}).json()
+    assert r["resolved"] == 1 and len(r["status"]["conflicts"]) == 1
+    r = client.post("/api/nutrition/sheet/conflicts/resolve", json={"use": "app"}).json()
+    assert r["resolved"] == 1 and r["status"]["conflicts"] == []
+    rows = {r["date"]: r for r in client.get("/api/nutrition/checkins?days=3650").json()}
+    assert (rows["2026-09-16"]["weight_kg"], rows["2026-09-17"]["weight_kg"]) == (81.5, 80.5)
+    # Decided rows aren't asked about again while the sheet row stays the same.
+    assert sheets.apply_entries(conn, sheet) == {"added": 0, "updated": 0, "unchanged": 3, "conflicts": 0}
+
+    # Mode 'app': a changed sheet row never overrides a value the app has.
+    assert client.put("/api/nutrition/sheet/conflict-mode", json={"mode": "app"}).json()["conflict_mode"] == "app"
+    sheet[1]["weight_kg"] = 81.0
+    assert sheets.apply_entries(conn, sheet)["conflicts"] == 0
+    assert next(r for r in store.list_weights(conn) if r["date"] == "2026-09-17")["weight_kg"] == 80.5
+    # Mode 'sheet': it does.
+    client.put("/api/nutrition/sheet/conflict-mode", json={"mode": "sheet"})
+    sheet[1]["weight_kg"] = 81.1
+    sheets.apply_entries(conn, sheet)
+    assert next(r for r in store.list_weights(conn) if r["date"] == "2026-09-17")["weight_kg"] == 81.1
+    assert client.put("/api/nutrition/sheet/conflict-mode", json={"mode": "maybe"}).status_code == 422
+
+
+def test_switching_mode_settles_open_questions(client, conn):
+    store.upsert_weight(conn, "2026-09-16", "evening", 81.3)
+    conn.commit()
+    sheets.apply_entries(conn, [_entry(date="2026-09-16", slot="evening", weight_kg=81.5)])
+    st = client.put("/api/nutrition/sheet/conflict-mode", json={"mode": "sheet"}).json()
+    assert st["conflicts"] == [] and store.list_weights(conn)[0]["weight_kg"] == 81.5
 
 
 def test_grid_save_keeps_sheet_note_and_score(client, conn):

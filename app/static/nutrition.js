@@ -129,6 +129,40 @@
     return iso ? new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
   }
 
+  var FIELD_LABEL = { weight_kg: "weight", score: "score", note: "note", time: "time" };
+  function fmtVal(f, v) { return f === "weight_kg" ? v.toFixed(1) + " kg" : f === "note" ? "“" + v + "”" : String(v); }
+
+  /* Weigh-ins where the sheet says something else than the app: the app's
+     value is kept until you pick. */
+  function conflictList(conflicts) {
+    function resolve(body, btn) {
+      btn.disabled = true;
+      TK.api("/api/nutrition/sheet/conflicts/resolve", { method: "POST", body: body }).then(load)
+        .catch(function (e) { btn.disabled = false; alert(e.message); });
+    }
+    var rows = conflicts.map(function (c) {
+      var useSheet = el("button", { type: "button", class: "btn-ghost", text: "Use sheet" });
+      var keepApp = el("button", { type: "button", class: "btn-ghost", text: "Keep app" });
+      useSheet.onclick = function () { resolve({ use: "sheet", date: c.date, slot: c.slot }, useSheet); };
+      keepApp.onclick = function () { resolve({ use: "app", date: c.date, slot: c.slot }, keepApp); };
+      return el("li", { "data-test": "conflict" }, [
+        el("b", { text: fmtDate(c.date) + " " + c.slot + ": " }),
+        c.fields.map(function (f) {
+          return FIELD_LABEL[f.field] + " — app " + fmtVal(f.field, f.app) + ", sheet " + fmtVal(f.field, f.sheet);
+        }).join("; ") + " ", useSheet, " ", keepApp]);
+    });
+    var allSheet = el("button", { type: "button", class: "btn-primary", text: "Use sheet for all" });
+    var allApp = el("button", { type: "button", class: "btn-primary", text: "Keep app for all" });
+    allSheet.onclick = function () { resolve({ use: "sheet" }, allSheet); };
+    allApp.onclick = function () { resolve({ use: "app" }, allApp); };
+    return el("div", { class: "sheet-conflicts" }, [
+      el("p", { class: "nut-advice", text: conflicts.length + (conflicts.length === 1 ? " weigh-in differs" : " weigh-ins differ") +
+        " between the sheet and the app. The app's value is kept until you choose." }),
+      el("ul", null, rows),
+      el("div", { class: "plan-actions" }, [allSheet, allApp]),
+    ]);
+  }
+
   /* Google Sheet import settings: the service-account e-mail to share the
      sheet with, the sheet link, the last result and Import now. */
   function sheetPanel(st) {
@@ -170,6 +204,16 @@
     kids.push(el("div", { class: "plan-actions sheet-form" }, [url, tab, save, imp]));
     showLast(st.last);
     kids.push(msg);
+
+    // When the sheet and the app hold different values for the same weigh-in.
+    var modes = [["ask", "Ask me"], ["sheet", "Always use the sheet"], ["app", "Always keep the app's value"]];
+    var modeSel = el("select", { "aria-label": "When the sheet and the app differ", "data-test": "conflict-mode",
+      onchange: function () {
+        TK.api("/api/nutrition/sheet/conflict-mode", { method: "PUT", body: { mode: modeSel.value } }).then(load)
+          .catch(function (e) { msg.className = "tk-msg err"; msg.textContent = e.message; });
+      } }, modes.map(function (m) { return el("option", { value: m[0], text: m[1], selected: st.conflict_mode === m[0] }); }));
+    kids.push(el("div", { class: "plan-actions sheet-mode" }, [el("span", { text: "When the sheet and the app differ:" }), modeSel]));
+    if (st.conflicts && st.conflicts.length) kids.push(conflictList(st.conflicts));
     var last = st.last;
     if (last && last.ok && last.skipped && last.skipped.length) {
       kids.push(el("details", null, [el("summary", { text: last.skipped_count + " rows skipped" }),

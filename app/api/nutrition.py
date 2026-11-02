@@ -221,6 +221,32 @@ def post_sheet_import(conn: sqlite3.Connection = Depends(get_db)):
     return {"result": result, "status": sheets.status(conn)}
 
 
+class ConflictModeIn(BaseModel):
+    mode: Literal["ask", "sheet", "app"]
+
+
+class ResolveIn(BaseModel):
+    use: Literal["sheet", "app"]
+    date: DateStr | None = None
+    slot: Literal["morning", "evening"] | None = None
+
+
+@router.put("/api/nutrition/sheet/conflict-mode")
+def put_conflict_mode(payload: ConflictModeIn, conn: sqlite3.Connection = Depends(get_db)):
+    """When the sheet and the app differ: ask, always use the sheet, or always keep the app."""
+    sheets.set_setting(conn, "sheet_conflicts", payload.mode)
+    if payload.mode != "ask":   # open questions follow the new rule
+        sheets.resolve_conflicts(conn, payload.mode)
+    return sheets.status(conn)
+
+
+@router.post("/api/nutrition/sheet/conflicts/resolve")
+def post_resolve_conflicts(payload: ResolveIn, conn: sqlite3.Connection = Depends(get_db)):
+    """Pick the sheet's or the app's value for one weigh-in (date + slot), or for all open ones."""
+    n = sheets.resolve_conflicts(conn, payload.use, payload.date, payload.slot)
+    return {"resolved": n, "status": sheets.status(conn)}
+
+
 @router.get("/api/nutrition/checkins")
 def get_checkins(days: int = 60, conn: sqlite3.Connection = Depends(get_db)):
     """Recent weigh-ins with time, morning score and note, newest first."""

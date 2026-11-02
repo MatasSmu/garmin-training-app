@@ -440,6 +440,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value  TEXT
 );
 
+-- Sheet rows whose values differ from what the app holds, waiting for the
+-- athlete to pick (only in the 'ask' mode); entry_json is the sheet's version.
+CREATE TABLE IF NOT EXISTS sheet_conflicts (
+  date         TEXT NOT NULL,
+  slot         TEXT NOT NULL,
+  fields_json  TEXT NOT NULL,
+  entry_json   TEXT NOT NULL,
+  row_hash     TEXT NOT NULL,
+  found_at     TEXT NOT NULL,
+  PRIMARY KEY (date, slot)
+);
+
 CREATE TABLE IF NOT EXISTS sheet_import_rows (
   date         TEXT NOT NULL,
   slot         TEXT NOT NULL,

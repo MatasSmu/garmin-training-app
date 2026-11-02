@@ -112,6 +112,8 @@ def status(conn: sqlite3.Connection) -> dict:
         "tab": cfg.get("tab"),
         "configured": bool(cfg.get("id")),
         "import_times": IMPORT_TIMES,
+        "conflict_mode": conflict_mode(conn),
+        "conflicts": list_conflicts(conn),
         "running": _lock.locked(),
         "last": get_setting(conn, "sheet_last_import"),
     }
@@ -430,9 +432,34 @@ def _hash(e: dict) -> str:
     return hashlib.sha1(json.dumps(keep, sort_keys=True).encode()).hexdigest()
 
 
-def apply_entries(conn: sqlite3.Connection, entries: list[dict]) -> dict:
-    counts = {"added": 0, "updated": 0, "unchanged": 0}
-    now = datetime.now(timezone.utc).isoformat()
+FIELDS_SYNCED = ("weight_kg", "score", "note", "time")
+CONFLICT_MODES = ("ask", "sheet", "app")
+
+
+def conflict_mode(conn: sqlite3.Connection) -> str:
+    m = get_setting(conn, "sheet_conflicts", "ask")
+    return m if m in CONFLICT_MODES else "ask"
+
+
+def _remember(conn: sqlite3.Connection, day: str, slot: str, h: str) -> None:
+    conn.execute("INSERT INTO sheet_import_rows (date, slot, row_hash, imported_at) VALUES (?, ?, ?, ?) "
+                 "ON CONFLICT(date, slot) DO UPDATE SET row_hash = excluded.row_hash, imported_at = excluded.imported_at",
+                 (day, slot, h, datetime.now(timezone.utc).isoformat()))
+    conn.execute("DELETE FROM sheet_conflicts WHERE date = ? AND slot = ?", (day, slot))
+
+
+def _write(conn: sqlite3.Connection, day: str, slot: str, values: dict) -> str:
+    return store.upsert_weight(conn, day, slot, values["weight_kg"], None,
+                               note=values["note"], score=values["score"], time=values["time"])
+
+
+def apply_entries(conn: sqlite3.Connection, entries: list[dict], mode: str | None = None) -> dict:
+    """Add new weigh-ins and fill empty fields. Where the app already holds a
+    different value: mode 'sheet' takes the sheet's, 'app' keeps the app's and
+    'ask' keeps the app's for now and lists the difference to decide in the UI.
+    A blank cell in the sheet never clears anything in the app."""
+    mode = mode or conflict_mode(conn)
+    counts = {"added": 0, "updated": 0, "unchanged": 0, "conflicts": 0}
     for e in entries:
         h = _hash(e)
         prev = conn.execute("SELECT row_hash FROM sheet_import_rows WHERE date = ? AND slot = ?",
@@ -440,13 +467,57 @@ def apply_entries(conn: sqlite3.Connection, entries: list[dict]) -> dict:
         if prev is not None and prev["row_hash"] == h:
             counts["unchanged"] += 1
             continue
-        res = store.upsert_weight(conn, e["date"], e["slot"], e["weight_kg"], None,
-                                  note=e["note"], score=e["score"], time=e["time"])
-        counts["added" if res == "created" else "updated" if res == "updated" else "unchanged"] += 1
-        conn.execute("INSERT INTO sheet_import_rows (date, slot, row_hash, imported_at) VALUES (?, ?, ?, ?) "
-                     "ON CONFLICT(date, slot) DO UPDATE SET row_hash = excluded.row_hash, imported_at = excluded.imported_at",
-                     (e["date"], e["slot"], h, now))
+        row = conn.execute("SELECT * FROM weight_entries WHERE date = ? AND slot = ?", (e["date"], e["slot"])).fetchone()
+        if row is None:
+            _write(conn, e["date"], e["slot"], e)
+            _remember(conn, e["date"], e["slot"], h)
+            counts["added"] += 1
+            continue
+        app = {f: row[f] for f in FIELDS_SYNCED}
+        diffs = [{"field": f, "app": app[f], "sheet": e[f]} for f in FIELDS_SYNCED
+                 if app[f] is not None and e[f] is not None and app[f] != e[f]]
+        sheet_wins = mode == "sheet" or not diffs
+        merged = {f: (e[f] if e[f] is not None and (sheet_wins or app[f] is None) else app[f]) for f in FIELDS_SYNCED}
+        res = _write(conn, e["date"], e["slot"], merged)
+        if diffs and mode == "ask":
+            conn.execute("INSERT INTO sheet_conflicts (date, slot, fields_json, entry_json, row_hash, found_at) "
+                         "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(date, slot) DO UPDATE SET fields_json = excluded.fields_json, "
+                         "entry_json = excluded.entry_json, row_hash = excluded.row_hash, found_at = excluded.found_at",
+                         (e["date"], e["slot"], json.dumps(diffs), json.dumps({f: e[f] for f in FIELDS_SYNCED}), h,
+                          datetime.now(timezone.utc).isoformat()))
+            counts["conflicts"] += 1
+        else:
+            _remember(conn, e["date"], e["slot"], h)
+        if not (diffs and mode == "ask"):
+            counts["updated" if res == "updated" else "unchanged"] += 1
     conn.commit()
+    return counts
+
+
+def list_conflicts(conn: sqlite3.Connection) -> list[dict]:
+    return [{"date": r["date"], "slot": r["slot"], "fields": json.loads(r["fields_json"])}
+            for r in conn.execute("SELECT * FROM sheet_conflicts ORDER BY date, slot")]
+
+
+def resolve_conflicts(conn: sqlite3.Connection, use: str, day: str | None = None, slot: str | None = None) -> int:
+    """use 'sheet' writes the sheet's values, 'app' keeps the app's; either
+    way the row isn't asked about again until it changes in the sheet.
+    Without day/slot: all open conflicts. Returns how many were resolved."""
+    if use not in ("sheet", "app"):
+        raise ValueError("use must be 'sheet' or 'app'")
+    q, params = "SELECT * FROM sheet_conflicts", []
+    if day and slot:
+        q, params = q + " WHERE date = ? AND slot = ?", [day, slot]
+    rows = conn.execute(q, params).fetchall()
+    for r in rows:
+        if use == "sheet":
+            cur = conn.execute("SELECT * FROM weight_entries WHERE date = ? AND slot = ?", (r["date"], r["slot"])).fetchone()
+            sheet = json.loads(r["entry_json"])
+            merged = {f: sheet[f] if sheet[f] is not None else (cur[f] if cur is not None else None) for f in FIELDS_SYNCED}
+            _write(conn, r["date"], r["slot"], merged)
+        _remember(conn, r["date"], r["slot"], r["row_hash"])
+    conn.commit()
+    return len(rows)
     return counts
 
 
@@ -463,6 +534,8 @@ def run_import(conn: sqlite3.Connection, source: str = "manual") -> dict:
         entries, skipped, cols = parse_rows(rows, locale, shown)
         counts = apply_entries(conn, entries)
         parts = [f"{counts['added']} added", f"{counts['updated']} updated", f"{counts['unchanged']} unchanged"]
+        if counts["conflicts"]:
+            parts.append(f"{counts['conflicts']} differ from the app (choose below)")
         if skipped:
             parts.append(f"{len(skipped)} skipped")
         result = {"ok": True, **counts, "rows_read": len(entries), "skipped_count": len(skipped),

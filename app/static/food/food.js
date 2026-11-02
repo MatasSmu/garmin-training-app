@@ -824,16 +824,17 @@
       }
     } else if (s.type === "manual") {
       h.push(head("Manual entry"));
-      // The athlete's way: the macros and the net weight are typed separately and saved exactly
-      // as typed -- nothing is recalculated now. Later (Recent, editing the grams) the item works
-      // per 100 g from these numbers.
+      // The athlete's way: the macros are per 100 g (as on a label) and the net weight is what was
+      // eaten; the meal is worked out from both (100 kcal/100 g and 50 g -> 50 kcal). The typed
+      // boxes stay as typed; only the "This meal" line changes. No weight -> saved as typed.
       h.push('<label class="field">What<input name="name" autocomplete="off" autofocus></label>' +
+        '<p class="muted pick-label">Per 100 g</p>' +
         '<div class="row"><label class="field">kcal<input name="kcal" inputmode="decimal"></label>' +
         '<label class="field">Protein g<input name="protein" inputmode="decimal"></label></div>' +
         '<div class="row"><label class="field">Carbs g (optional)<input name="carbs" inputmode="decimal"></label>' +
         '<label class="field">Fat g (optional)<input name="fat" inputmode="decimal"></label></div>' +
-        '<label class="field">Net weight (g)<input name="grams" inputmode="decimal" autocomplete="off" placeholder="optional"></label>' +
-        '<p class="muted" id="manualCalc" data-test="manual-total" hidden></p>' + mealSelect(defaultMeal(nowHHMM())));
+        '<label class="field">Net weight you ate (g)<input name="grams" inputmode="decimal" autocomplete="off"></label>' +
+        '<p class="pick-total" id="manualCalc" data-test="manual-total" hidden></p>' + mealSelect(defaultMeal(nowHHMM())));
       if (s.error) h.push('<p class="err">' + esc(s.error) + "</p>");
       h.push('<button type="button" class="big-btn" data-act="manual-save">Add</button>');
     } else if (s.type === "scan") {
@@ -1260,19 +1261,25 @@
     var t = e.target.closest("[data-act]");
     if (t && t.tagName !== "INPUT") sheetAction(t.dataset.act, t);
   });
-  /* Manual entry: saved exactly as typed (macros for the whole thing + its
-     net weight). The note only tells what that is per 100 g. */
+  /* Manual entry: the typed macros are per 100 g; with a net weight the meal
+     is scaled to it (100 kcal per 100 g, 50 g -> 50 kcal). Without a weight the
+     numbers are taken as they are. */
   function manualValues() {
-    return { grams: opt(num("grams")), kcal: num("kcal"), protein_g: opt(num("protein")),
-             carbs_g: opt(num("carbs")), fat_g: opt(num("fat")) };
+    var g = opt(num("grams"));
+    var typed = { kcal: num("kcal"), protein_g: opt(num("protein")), carbs_g: opt(num("carbs")), fat_g: opt(num("fat")) };
+    if (!g || g <= 0 || typed.kcal === null || isNaN(typed.kcal)) return Object.assign({ grams: g }, typed);
+    var sv = scale({ kcal_100g: typed.kcal, protein_100g: typed.protein_g, carbs_100g: typed.carbs_g, fat_100g: typed.fat_g }, g);
+    return { grams: g, kcal: sv.kcal, protein_g: sv.protein_g, carbs_g: sv.carbs_g, fat_g: sv.fat_g };
   }
   function updateManualCalc() {
     var out = document.getElementById("manualCalc");
     if (!out) return;
     var mv = manualValues(), k = mv.kcal;
-    if (k === null || isNaN(k) || !mv.grams) { out.hidden = true; return; }
+    if (k === null || isNaN(k)) { out.hidden = true; return; }
     out.hidden = false;
-    out.textContent = "Saved as typed. That's " + r0(k / mv.grams * 100) + " kcal per 100 g — used when you add it again with other grams.";
+    if (!mv.grams) { out.textContent = "Type the net weight to work out the meal (without it, the numbers are saved as they are)."; return; }
+    out.innerHTML = "This meal (" + r0(mv.grams) + " g): <b>" + r0(k) + " kcal</b> · " + r1(mv.protein_g || 0) + " g protein" +
+      (mv.carbs_g != null ? " · " + r1(mv.carbs_g) + " g carbs" : "") + (mv.fat_g != null ? " · " + r1(mv.fat_g) + " g fat" : "");
   }
 
   function setBox(name, v, nd) {

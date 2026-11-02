@@ -6,7 +6,7 @@
    Bump VERSION to drop old caches. */
 "use strict";
 
-var VERSION = "food-shell-v10";
+var VERSION = "food-shell-v11";
 var SHELL = [
   "/food/",
   "/food/manifest.webmanifest",

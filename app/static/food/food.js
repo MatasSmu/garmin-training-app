@@ -166,6 +166,42 @@
     Object.keys(t).forEach(function (k) { t[k] = Math.round(t[k] * 10) / 10; });
     return t;
   }
+  /* Same rule as calc.meal_count on the server: breakfast / lunch / dinner
+     count once each, snacks once per group logged within an hour. */
+  function mealCount(logs) {
+    var main = {}, times = [], untimed = false;
+    logs.forEach(function (l) {
+      if (l.meal === "snack") {
+        var m = /^(\d{1,2}):(\d{2})/.exec(l.time || "");
+        if (m) times.push(+m[1] * 60 + +m[2]); else untimed = true;
+      } else if (l.meal) main[l.meal] = true;
+    });
+    times.sort(function (a, b) { return a - b; });
+    var snacks = times.filter(function (t, i) { return i === 0 || t - times[i - 1] >= 60; }).length;
+    if (!times.length && untimed) snacks = 1;
+    return { meals: Object.keys(main).length, snacks: snacks };
+  }
+  function mealsText(c) {
+    if (!c.meals && !c.snacks) return "—";
+    return c.meals + (c.meals === 1 ? " meal" : " meals") + (c.snacks ? " + " + c.snacks + (c.snacks === 1 ? " snack" : " snacks") : "");
+  }
+  /* Share of energy from protein / carbs / fat (4 / 4 / 9 kcal per g). */
+  function split(t) {
+    var p = t.protein_g * 4, c = t.carbs_g * 4, f = t.fat_g * 9, all = p + c + f;
+    if (!all) return null;
+    return { p: Math.round(p / all * 100), c: Math.round(c / all * 100), f: Math.round(f / all * 100) };
+  }
+  function macroCard(tot, logs) {
+    var s = split(tot), mc = mealCount(logs);
+    return '<div class="macro-row" data-test="macros">' +
+      '<span class="mc-p"><b>' + r0(tot.protein_g) + " g</b>Protein" + (s ? " · " + s.p + "%" : "") + "</span>" +
+      '<span class="mc-c"><b>' + r0(tot.carbs_g) + " g</b>Carbs" + (s ? " · " + s.c + "%" : "") + "</span>" +
+      '<span class="mc-f"><b>' + r0(tot.fat_g) + " g</b>Fat" + (s ? " · " + s.f + "%" : "") + "</span>" +
+      '<span class="mc-m"><b data-test="meal-count">' + (mc.meals + mc.snacks) + "</b>" + esc(mealsText(mc)) + "</span></div>" +
+      (s ? '<div class="split" aria-label="Energy split: protein ' + s.p + "%, carbs " + s.c + "%, fat " + s.f + '%">' +
+        '<i class="sp-p" style="width:' + s.p + '%"></i><i class="sp-c" style="width:' + s.c + '%"></i><i class="sp-f" style="width:' + s.f + '%"></i></div>' : "");
+  }
+  function pcf(t) { return r0(t.protein_g) + " P · " + r0(t.carbs_g) + " C · " + r0(t.fat_g) + " F"; }
 
   function logsList() {
     return Object.keys(LOCAL.logs).map(function (k) { return LOCAL.logs[k]; });
@@ -436,7 +472,7 @@
       (isToday ? "Today, " : "") + fmtDay(day) + '</b><button type="button" class="nav-btn" data-act="day" data-d="1" aria-label="Next day"' +
       (isToday ? " disabled" : "") + ">›</button></div>");
     h.push('<div class="card">' + bar("Protein", tot.protein_g, "g", t.protein_g, null, "protein-total") +
-      bar("Calories", tot.kcal, "kcal", t.kcal_min, t.kcal_max, "kcal-total") + "</div>");
+      bar("Calories", tot.kcal, "kcal", t.kcal_min, t.kcal_max, "kcal-total") + macroCard(tot, logs) + "</div>");
 
     var meals = savedMeals();
     h.push('<div class="card"><div class="card-head"><h2>Saved meals</h2>' +
@@ -472,13 +508,13 @@
       var group = logs.filter(function (l) { return l.meal === meal; });
       if (!group.length) return;
       var gt = sum(group);
-      h.push('<div class="meal-head"><span>' + MEAL_LABEL[meal] + " · " + r0(gt.kcal) + " kcal · " + r0(gt.protein_g) + ' g P</span>' +
+      h.push('<div class="meal-head"><span>' + MEAL_LABEL[meal] + " · " + r0(gt.kcal) + " kcal<small>" + pcf(gt) + " g</small></span>" +
         '<button type="button" class="link-btn" data-act="save-meal" data-meal="' + meal + '">Save as meal</button></div><div class="list">' +
         group.map(function (l) {
           return '<button type="button" class="item" data-act="edit" data-id="' + esc(l.id) + '"><span class="item-main"><span class="item-name">' +
             esc(l.description || "Entry") + (l.source === "estimate" ? '<span class="tag">est</span>' : "") +
             (isPending(l) ? '<span class="tag wait">waiting</span>' : "") + '</span><span class="item-sub">' + esc(l.time || "") +
-            (l.grams ? " · " + r0(l.grams) + " g" : "") + '</span></span><span class="item-num mono"><b>' + r0(l.kcal) + "</b>" + r0(l.protein_g) + " g P</span></button>";
+            (l.grams ? " · " + r0(l.grams) + " g" : "") + '</span></span><span class="item-num mono"><b>' + r0(l.kcal) + "</b>" + pcf(l) + "</span></button>";
         }).join("") + "</div>");
     });
     h.push("</div>");
@@ -616,19 +652,24 @@
     var days = [];
     var hit = function (d) { return t.protein_g && d.protein_g >= t.protein_g; };
     for (var i = 6; i >= 0; i--) {
-      var d = addDays(today(), -i), tot = sum(dayLogs(d));
-      days.push({ date: d, kcal: tot.kcal, protein_g: tot.protein_g, n: dayLogs(d).length });
+      var d = addDays(today(), -i), dl = dayLogs(d), tot = sum(dl), mc = mealCount(dl);
+      days.push({ date: d, kcal: tot.kcal, protein_g: tot.protein_g, carbs_g: tot.carbs_g, fat_g: tot.fat_g,
+        times: mc.meals + mc.snacks, mc: mc, n: dl.length });
     }
     var logged = days.filter(function (d) { return d.n; });
     var avg = function (k) { return logged.length ? logged.reduce(function (s, d) { return s + d[k]; }, 0) / logged.length : null; };
     h.push('<div class="card"><h2>Last 7 days</h2><div class="wk-nums">' +
       "<span><b>" + (avg("kcal") != null ? kcalFmt(avg("kcal")) : "—") + "</b>avg kcal</span>" +
       "<span><b>" + r0(avg("protein_g")) + "</b>avg protein g</span>" +
+      "<span><b>" + r0(avg("carbs_g")) + "</b>avg carbs g</span>" +
+      "<span><b>" + r0(avg("fat_g")) + "</b>avg fat g</span>" +
+      "<span><b>" + (avg("times") != null ? r1(avg("times")) : "—") + "</b>eating times / day</span>" +
       "<span><b>" + days.filter(hit).length + "/7</b>protein days</span>" +
       "<span><b>" + logged.length + "/7</b>days logged</span></div>" +
       '<div class="list" style="margin-top:8px">' + days.slice().reverse().map(function (d) {
-        return '<div class="item"><span class="item-main"><span class="item-name">' + fmtDay(d.date) + '</span></span><span class="item-num mono"><b>' +
-          (d.n ? kcalFmt(d.kcal) + " kcal" : "—") + "</b>" + (d.n ? r0(d.protein_g) + " g P" + (hit(d) ? " ✓" : "") : "") + "</span></div>";
+        return '<div class="item"><span class="item-main"><span class="item-name">' + fmtDay(d.date) + '</span><span class="item-sub">' +
+          (d.n ? esc(mealsText(d.mc)) : "") + '</span></span><span class="item-num mono"><b>' +
+          (d.n ? kcalFmt(d.kcal) + " kcal" : "—") + "</b>" + (d.n ? pcf(d) + (hit(d) ? " ✓" : "") : "") + "</span></div>";
       }).join("") + "</div></div>");
 
     var e = BOOT && BOOT.expenditure;
@@ -652,6 +693,9 @@
         esc(w.status_label) + '</span></div><div class="wk-nums">' +
         "<span><b>" + (w.avg_kcal != null ? kcalFmt(w.avg_kcal) : "—") + "</b>avg kcal</span>" +
         "<span><b>" + r0(w.avg_protein_g) + "</b>avg protein</span>" +
+        "<span><b>" + r0(w.avg_carbs_g) + "</b>avg carbs</span>" +
+        "<span><b>" + r0(w.avg_fat_g) + "</b>avg fat</span>" +
+        "<span><b>" + (w.avg_eating_times != null ? w.avg_eating_times : "—") + "</b>eating times / day</span>" +
         "<span><b>" + w.protein_days + "/" + w.food_days + "</b>protein days</span>" +
         "<span><b>" + (w.trend_change_kg != null ? signed(w.trend_change_kg, 2) : "—") + "</b>trend kg</span></div></div>";
     }).join("") + "</div>");

@@ -113,6 +113,21 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .tag{font-size:11px; font-weight:700; border-radius:6px; padding:1px 6px; background:var(--plan-soft); color:var(--plan); margin-left:6px; vertical-align:1px;}
 .tag.wait{background:var(--warn-soft); color:var(--warn);}
 .meal-head{display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:13px; font-weight:700; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.04em;}
+.meal-head small{display:block; font-size:12px; font-weight:600; text-transform:none; letter-spacing:0; margin-top:1px;}
+
+/* ---- today: protein / carbs / fat / meals and the energy split ---- */
+.macro-row{display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:14px; font-size:12px; color:var(--ink-muted);}
+.macro-row b{display:block; font-size:17px; color:var(--ink); font-variant-numeric:tabular-nums;}
+.macro-row span{border-left:3px solid var(--border); padding-left:7px;}
+.macro-row .mc-p{border-color:var(--teal);}
+.macro-row .mc-c{border-color:#E9B872;}
+.macro-row .mc-f{border-color:var(--accent);}
+.macro-row .mc-m{border-color:var(--plan);}
+.split{display:flex; height:8px; border-radius:4px; overflow:hidden; margin-top:10px; background:var(--surface-2);}
+.split i{display:block; height:100%;}
+.split .sp-p{background:var(--teal);}
+.split .sp-c{background:#E9B872;}
+.split .sp-f{background:var(--accent);}
 .meal-head:first-child{margin-top:0;}
 .link-btn{border:0; background:transparent; color:var(--teal-strong); font-weight:700; font-size:13px; padding:8px 0 8px 8px; text-transform:none; letter-spacing:0;}
 
@@ -165,7 +180,7 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .wk{border-top:1px solid var(--border); padding:10px 0;}
 .wk:first-of-type{border-top:0;}
 .wk-head{display:flex; justify-content:space-between; align-items:center; gap:8px;}
-.wk-nums{display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:6px; font-size:12px; color:var(--ink-muted);}
+.wk-nums{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px, 1fr)); gap:8px 6px; margin-top:6px; font-size:12px; color:var(--ink-muted);}
 .wk-nums b{display:block; font-size:16px; color:var(--ink);}
 
 /* ---- sheet ---- */

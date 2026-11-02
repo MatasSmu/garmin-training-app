@@ -286,8 +286,11 @@ def _nutrition_briefing(n: dict) -> list[str]:
     if days:
         lines.append(f"- Nutrition last 7 days (targets {t['kcal_min']}-{t['kcal_max']} kcal, {t['protein_g']} g protein; "
                      "today is partial; 0 = nothing logged):")
-        lines.append("  - " + "; ".join(f"{d['date'][5:]}: {round(d['kcal'])} kcal / {round(d['protein_g'])} g P"
-                                         for d in days))
+        lines.append("  - " + "; ".join(
+            f"{d['date'][5:]}: {round(d['kcal'])} kcal / {round(d['protein_g'])} g P / {round(d.get('carbs_g') or 0)} g C"
+            f" / {round(d.get('fat_g') or 0)} g F"
+            + (f", {d['meals']} meals + {d['snacks']} snacks" if d.get("entries") else "")
+            for d in days))
     if n.get("expenditure_kcal"):
         lines.append(f"- Estimated expenditure ~{n['expenditure_kcal']} kcal/day (intake vs trend, rough).")
     if n.get("advice"):

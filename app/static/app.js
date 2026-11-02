@@ -81,7 +81,11 @@
           document.getElementById("statWeightLabel").textContent = "Trend weight" +
             (n.rate_kg_week != null ? " · " + (n.rate_kg_week >= 0 ? "+" : "") + n.rate_kg_week.toFixed(2) + " kg/wk, " + n.status_label.toLowerCase() : "");
           document.getElementById("statProtein").textContent = Math.round(n.protein_today_g) + (n.protein_target_g ? " / " + n.protein_target_g + " g" : " g");
-          document.getElementById("statProteinLabel").textContent = "Protein today · " + Math.round(n.kcal_today) + " kcal";
+          document.getElementById("statProteinLabel").textContent = "protein · " + Math.round(n.kcal_today).toLocaleString("en-US") + " kcal";
+          var meals = n.meals_today || 0, snacks = n.snacks_today || 0;
+          document.getElementById("statMacros").textContent = Math.round(n.carbs_today_g || 0) + " g carbs · " +
+            Math.round(n.fat_today_g || 0) + " g fat · " + (meals || snacks ? meals + (meals === 1 ? " meal" : " meals") +
+            (snacks ? " + " + snacks + (snacks === 1 ? " snack" : " snacks") : "") : "nothing logged yet");
         }
       });
   }

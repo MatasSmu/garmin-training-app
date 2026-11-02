@@ -15,6 +15,10 @@
     return new Date(iso + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   }
   function r0(v) { return v === null || v === undefined ? "—" : Math.round(v).toLocaleString("en-US"); }
+  function mealsText(r) {
+    if (!r || (!r.meals && !r.snacks)) return "—";
+    return r.meals + (r.meals === 1 ? " meal" : " meals") + (r.snacks ? " + " + r.snacks + (r.snacks === 1 ? " snack" : " snacks") : "");
+  }
   function signed(v, nd) { return v === null || v === undefined ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(nd); }
 
   function load() {
@@ -53,6 +57,9 @@
         tile(w.rate_kg_week != null ? signed(w.rate_kg_week, 2) + " kg/wk" : "—", "Weekly rate (target " + signed(w.target_rate_kg_week, 1) + ")"),
         tile(w.status_label, w.projected_date ? w.goal_weight_kg + " kg projected " + fmtDate(w.projected_date) : "Status vs plan", "nut-" + w.status, "nut-status"),
         tile(r0(d.protein_g) + " / " + t.protein_g + " g", "Protein today · " + r0(d.kcal) + " kcal"),
+        tile(r0(d.carbs_g) + " g · " + r0(d.fat_g) + " g", "Carbs · fat today" +
+          (d.protein_pct != null ? " (energy " + d.protein_pct + "% P / " + d.carbs_pct + "% C / " + d.fat_pct + "% F)" : ""), null, "nut-cf"),
+        tile(mealsText(d), "Eaten today" + (d.entries ? " · " + d.entries + " entries" : ""), null, "nut-meals"),
       ]),
       el("p", { class: "panel-sub", text: "Log food and type in your weights on the phone (works offline, syncs when the laptop is reachable)." }),
       el("a", { class: "btn-primary", href: "/food/", target: "_blank", rel: "noopener", text: "Open food & weight logger" }),
@@ -97,6 +104,12 @@
       { key: "protein_g", label: "Protein g", num: true, fmt: function (r) {
         return r.entries ? r0(r.protein_g) + (r.protein_g >= t.protein_g ? " ✓" : "") : "—";
       } },
+      { key: "carbs_g", label: "Carbs g", num: true, fmt: function (r) { return r.entries ? r0(r.carbs_g) : "—"; } },
+      { key: "fat_g", label: "Fat g", num: true, fmt: function (r) { return r.entries ? r0(r.fat_g) : "—"; } },
+      { key: "carbs_pct", label: "Split P/C/F %", sortable: false, fmt: function (r) {
+        return r.entries && r.protein_pct != null ? r.protein_pct + " / " + r.carbs_pct + " / " + r.fat_pct : "—";
+      } },
+      { key: "eating_times", label: "Meals", num: true, fmt: function (r) { return r.entries ? mealsText(r) : "—"; } },
       { key: "entries", label: "Entries", num: true },
     ], rows, { sortKey: "date", sortDir: -1 })]);
   }
@@ -106,6 +119,10 @@
       { key: "week_start", label: "Week", fmt: function (r) { return fmtDate(r.week_start) + " – " + fmtDate(r.week_end); } },
       { key: "avg_kcal", label: "Avg kcal", num: true, fmt: function (r) { return r0(r.avg_kcal); } },
       { key: "avg_protein_g", label: "Avg protein g", num: true },
+      { key: "avg_carbs_g", label: "Avg carbs g", num: true, fmt: function (r) { return r0(r.avg_carbs_g); } },
+      { key: "avg_fat_g", label: "Avg fat g", num: true, fmt: function (r) { return r0(r.avg_fat_g); } },
+      { key: "avg_eating_times", label: "Eating times / day", num: true, fmt: function (r) {
+        return r.avg_eating_times != null ? String(r.avg_eating_times) : "—"; } },
       { key: "protein_days", label: "Protein target days", num: true, fmt: function (r) { return r.protein_days + " / " + r.food_days; } },
       { key: "weigh_ins", label: "Weigh-ins", num: true },
       { key: "trend_change_kg", label: "Trend Δ kg", num: true, fmt: function (r) { return signed(r.trend_change_kg, 2); } },

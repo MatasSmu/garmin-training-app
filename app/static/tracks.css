@@ -243,7 +243,7 @@ details.panel[open] > summary{margin-bottom:14px;}
 .tk-wind.st-doubtful{background:var(--block); color:#fff;}
 
 /* ---- Nutrition tab (nutrition.js) ---------------------------------- */
-.nut-stats{grid-template-columns:repeat(4,1fr); margin:8px 0 14px;}
+.nut-stats{grid-template-columns:repeat(3,1fr); margin:8px 0 14px;}
 @media (max-width:760px){ .nut-stats{grid-template-columns:repeat(2,1fr);} }
 .nut-stats .nut-on_track, .nut-stats .nut-reached{background:var(--teal-soft);}
 .nut-chart{max-width:860px; margin:4px 0 8px;}

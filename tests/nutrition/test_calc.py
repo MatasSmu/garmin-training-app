@@ -125,3 +125,24 @@ def test_food_scaling_totals_and_meal_slots():
         "kcal": 150.5, "protein_g": 10, "carbs_g": 0, "fat_g": 3}
     assert [calc.default_meal(t) for t in ("07:00", "12:30", "16:00", "19:00", "23:00")] == [
         "breakfast", "lunch", "snack", "dinner", "snack"]
+
+
+def test_meal_count_meals_once_snacks_by_hour_gaps():
+    logs = [
+        {"meal": "breakfast", "time": "08:00"}, {"meal": "breakfast", "time": "08:05"},
+        {"meal": "lunch", "time": "13:00"},
+        {"meal": "snack", "time": "15:24"}, {"meal": "snack", "time": "16:10"},   # 46 min apart: one snack
+        {"meal": "snack", "time": "18:35"},                                       # a second snack
+    ]
+    assert calc.meal_count(logs) == {"meals": 2, "snacks": 2, "eating_times": 4}
+    assert calc.meal_count([{"meal": "snack", "time": None}]) == {"meals": 0, "snacks": 1, "eating_times": 1}
+    assert calc.meal_count([]) == {"meals": 0, "snacks": 0, "eating_times": 0}
+
+
+def test_macro_split_shares_of_energy():
+    # 160 g protein = 640 kcal, 500 g carbs = 2000 kcal, 120 g fat = 1080 kcal
+    assert calc.macro_split({"protein_g": 160, "carbs_g": 500, "fat_g": 120}) == \
+        {"protein_pct": 17, "carbs_pct": 54, "fat_pct": 29}
+    assert calc.macro_split({"protein_g": 25, "carbs_g": 25, "fat_g": 0}) == \
+        {"protein_pct": 50, "carbs_pct": 50, "fat_pct": 0}
+    assert calc.macro_split({"protein_g": 0, "carbs_g": None, "fat_g": 0})["protein_pct"] is None

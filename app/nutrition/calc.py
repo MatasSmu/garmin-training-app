@@ -164,6 +164,44 @@ def totals(items: list[dict]) -> dict:
     return {k: round(sum((x.get(k) or 0) for x in items), 1) for k in MACROS}
 
 
+MAIN_MEALS = ("breakfast", "lunch", "dinner")
+SNACK_GAP_MIN = 60          # snacks logged at least this far apart count separately
+
+
+def _minutes(hhmm: str | None) -> int | None:
+    try:
+        h, m = (int(x) for x in hhmm.split(":")[:2])
+        return h * 60 + m
+    except (AttributeError, ValueError):
+        return None
+
+
+def meal_count(items: list[dict]) -> dict:
+    """How many times the athlete ate: each of breakfast / lunch / dinner
+    counts once, snacks count once per group logged within an hour of each
+    other (snacks without a time count as one). The same rule runs on the
+    phone page (food.js mealCount)."""
+    meals = len({x.get("meal") for x in items if x.get("meal") in MAIN_MEALS})
+    times = sorted(t for t in (_minutes(x.get("time")) for x in items if x.get("meal") == "snack") if t is not None)
+    snacks = sum(1 for i, t in enumerate(times) if i == 0 or t - times[i - 1] >= SNACK_GAP_MIN)
+    if not times and any(x.get("meal") == "snack" for x in items):
+        snacks = 1
+    return {"meals": meals, "snacks": snacks, "eating_times": meals + snacks}
+
+
+KCAL_PER_G = {"protein_g": 4, "carbs_g": 4, "fat_g": 9}
+
+
+def macro_split(t: dict) -> dict:
+    """Share of energy from protein / carbs / fat in % (of the energy the three
+    macros add up to, so it sums to 100 even when kcal was rounded)."""
+    kcal = {k: (t.get(k) or 0) * f for k, f in KCAL_PER_G.items()}
+    total = sum(kcal.values())
+    if total <= 0:
+        return {"protein_pct": None, "carbs_pct": None, "fat_pct": None}
+    return {k.replace("_g", "_pct"): round(v / total * 100) for k, v in kcal.items()}
+
+
 def default_meal(hhmm: str) -> str:
     """Meal slot from the clock."""
     h, m = (int(x) for x in hhmm.split(":")[:2])

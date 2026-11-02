@@ -402,9 +402,18 @@ def day_logs(conn: sqlite3.Connection, day: str) -> list[dict]:
         "SELECT * FROM food_logs WHERE date = ? AND deleted = 0 ORDER BY time, created_at", (day,))]
 
 
+def _day_summary(logs: list[dict]) -> dict:
+    """kcal / protein / carbs / fat, meals + snacks and the energy split of a day's logs."""
+    t = calc.totals(logs)
+    return {**t, **calc.macro_split(t), **calc.meal_count(logs), "entries": len(logs)}
+
+
+EMPTY_DAY = {"kcal": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "protein_pct": None, "carbs_pct": None,
+             "fat_pct": None, "meals": 0, "snacks": 0, "eating_times": 0, "entries": 0}
+
+
 def day_totals(conn: sqlite3.Connection, day: str) -> dict:
-    logs = day_logs(conn, day)
-    return {**calc.totals(logs), "entries": len(logs)}
+    return _day_summary(day_logs(conn, day))
 
 
 def recent_logs(conn: sqlite3.Connection, days: int = PHONE_LOG_DAYS, today: date | None = None) -> list[dict]:
@@ -415,16 +424,13 @@ def recent_logs(conn: sqlite3.Connection, days: int = PHONE_LOG_DAYS, today: dat
 
 
 def daily_food(conn: sqlite3.Connection, start: date, end: date) -> dict[date, dict]:
-    """Per-day totals between start and end (only days with entries)."""
-    out = {}
+    """Per-day totals, meal count and energy split between start and end (only days with entries)."""
+    by_day: dict[date, list[dict]] = {}
     for r in conn.execute(
-        """SELECT date, SUM(kcal) AS kcal, SUM(protein_g) AS protein_g, SUM(COALESCE(carbs_g, 0)) AS carbs_g,
-                  SUM(COALESCE(fat_g, 0)) AS fat_g, COUNT(*) AS entries
-           FROM food_logs WHERE deleted = 0 AND date BETWEEN ? AND ? GROUP BY date""",
-        (start.isoformat(), end.isoformat()),
-    ):
-        out[date.fromisoformat(r["date"])] = {k: round(r[k], 1) for k in calc.MACROS} | {"entries": r["entries"]}
-    return out
+        "SELECT date, meal, time, kcal, protein_g, carbs_g, fat_g FROM food_logs "
+        "WHERE deleted = 0 AND date BETWEEN ? AND ?", (start.isoformat(), end.isoformat())):
+        by_day.setdefault(date.fromisoformat(r["date"]), []).append(dict(r))
+    return {d: _day_summary(logs) for d, logs in by_day.items()}
 
 
 # --------------------------------------------------------------------- sync
@@ -506,6 +512,9 @@ def weekly_summary(conn: sqlite3.Connection, weeks: int = SUMMARY_WEEKS, today: 
             "food_days": len(logged),
             "avg_kcal": round(sum(x["kcal"] for x in logged) / len(logged)) if logged else None,
             "avg_protein_g": round(sum(x["protein_g"] for x in logged) / len(logged)) if logged else None,
+            "avg_carbs_g": round(sum(x["carbs_g"] for x in logged) / len(logged)) if logged else None,
+            "avg_fat_g": round(sum(x["fat_g"] for x in logged) / len(logged)) if logged else None,
+            "avg_eating_times": round(sum(x["eating_times"] for x in logged) / len(logged), 1) if logged else None,
             "protein_days": sum(1 for x in logged if protein_target and x["protein_g"] >= protein_target),
             "weigh_ins": sum(1 for d in days if d in morning),
             "trend_change_kg": round(change, 2) if change is not None else None,
@@ -564,7 +573,7 @@ def last_days(conn: sqlite3.Connection, n: int = 7, today: date | None = None) -
     start = today - timedelta(days=n - 1)
     food = daily_food(conn, start, today)
     return [{"date": (start + timedelta(days=i)).isoformat(),
-             **(food.get(start + timedelta(days=i)) or {"kcal": 0, "protein_g": 0, "entries": 0})}
+             **(food.get(start + timedelta(days=i)) or EMPTY_DAY)}
             for i in range(n)]
 
 
@@ -590,6 +599,8 @@ def dashboard_summary(conn: sqlite3.Connection, today: date | None = None) -> di
         "trend_kg": w["trend_kg"], "rate_kg_week": w["rate_kg_week"], "status": w["status"],
         "status_label": w["status_label"], "protein_today_g": d["protein_g"], "kcal_today": d["kcal"],
         "protein_target_g": t["protein_g"], "kcal_min": t["kcal_min"], "kcal_max": t["kcal_max"],
+        "carbs_today_g": d["carbs_g"], "fat_today_g": d["fat_g"],
+        "meals_today": d["meals"], "snacks_today": d["snacks"],
         "checkin": latest_checkin(conn, today),
     }
 

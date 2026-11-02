@@ -61,7 +61,9 @@ def test_food_log_totals_for_a_day(conn):
     _log(conn, 3, 999, 99, deleted=True)          # deleted entries don't count
     _log(conn, 4, 500, 30, day="2026-11-06")      # other day
     t = store.day_totals(conn, "2026-11-05")
-    assert t == {"kcal": 1450.5, "protein_g": 95.5, "carbs_g": 70, "fat_g": 20, "entries": 2}
+    assert t == {"kcal": 1450.5, "protein_g": 95.5, "carbs_g": 70, "fat_g": 20, "entries": 2,
+                 # energy split: 382 kcal protein + 280 kcal carbs + 180 kcal fat; both at lunch = 1 meal
+                 "protein_pct": 45, "carbs_pct": 33, "fat_pct": 21, "meals": 1, "snacks": 0, "eating_times": 1}
 
 
 def test_saved_meal_adds_correct_totals(conn):

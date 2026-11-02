@@ -262,8 +262,12 @@
       .sort(byRecent).forEach(function (l) {
         var key = l.food_id && foods[l.food_id] ? "f:" + l.food_id
           : "t:" + (l.description || "").toLowerCase() + "|" + l.kcal + "|" + l.protein_g;
-        if (seen[key] || out.length >= 10) return;
-        seen[key] = true;
+        if (key in seen) {   // prefer a copy that still knows its weight (old re-adds dropped it)
+          if (!out[seen[key]].grams && l.grams) out[seen[key]] = l;
+          return;
+        }
+        if (out.length >= 10) return;
+        seen[key] = out.length;
         out.push(l);
       });
     return out;
@@ -370,8 +374,9 @@
   function relog(l) {
     var food = l.food_id && foodsById()[l.food_id];
     if (food) return logFood(food, lastGramsFor(food));
-    return addLog({ kcal: l.kcal, protein_g: l.protein_g, carbs_g: l.carbs_g, fat_g: l.fat_g,
-                    description: l.description, source: l.source === "estimate" ? "estimate" : "manual" });
+    return addLog({ kcal: l.kcal, protein_g: l.protein_g, carbs_g: l.carbs_g, fat_g: l.fat_g, grams: l.grams || null,
+                    description: l.description, source: l.source === "estimate" ? "estimate" : "manual" },
+                  "Added " + (l.description || "entry") + (l.grams ? " " + r0(l.grams) + " g" : ""));
   }
 
   // ================================================================ sync
@@ -803,6 +808,8 @@
         h.push('<div class="est-head"><span>kcal</span><span>Protein g</span><span>Carbs g</span><span>Fat g</span><span></span></div>');
         s.items.forEach(function (it, i) {
           h.push('<div class="est-row" data-row="' + i + '"><input class="est-name" name="n' + i + '" value="' + esc(it.name) + '" aria-label="Item">' +
+            '<label class="est-grams"><input name="g' + i + '" inputmode="decimal" autocomplete="off" value="' + esc(it.grams ? r0(it.grams) : "") +
+            '" placeholder="?" aria-label="grams"><span>g</span></label>' +
             '<input name="k' + i + '" inputmode="decimal" value="' + esc(r0(it.kcal)) + '" aria-label="kcal">' +
             '<input name="p' + i + '" inputmode="decimal" value="' + esc(r1(it.protein_g)) + '" aria-label="protein g">' +
             '<input name="c' + i + '" inputmode="decimal" value="' + esc(it.carbs_g != null ? r1(it.carbs_g) : "") + '" aria-label="carbs g">' +
@@ -873,13 +880,19 @@
     } else if (s.type === "edit") {
       var l = LOCAL.logs[s.id];
       if (!l) { closeSheet(); return; }
-      var food = l.food_id && foodsById()[l.food_id];
+      if (s.base === undefined) s.base = per100Of(l);     // from the entry as it was opened
       h.push(head(l.description || "Entry"));
       h.push('<label class="field">What<input name="name" value="' + esc(l.description || "") + '"></label>');
-      if (food) {
-        h.push('<label class="field">Grams<input name="grams" inputmode="decimal" value="' + esc(r0(l.grams)) + '"></label>' +
-          '<p class="muted">' + r0(food.kcal_100g) + " kcal · " + r1(food.protein_100g) + " g protein per 100 g — change grams to recalculate, " +
-          "or type the numbers yourself.</p>");
+      // How much of it: changing the grams recalculates kcal / protein / carbs / fat (per 100 g below).
+      h.push('<label class="field">How much (g)<input name="grams" inputmode="decimal" autocomplete="off" data-act="edit-grams" value="' +
+        esc(l.grams ? r0(l.grams) : "") + '" placeholder="weight in grams"></label>');
+      if (s.base) {
+        var b100 = s.base.per100;
+        h.push('<p class="muted">Per 100 g: ' + r0(b100.kcal_100g) + " kcal · " + r1(b100.protein_100g) + " P · " +
+          (b100.carbs_100g == null ? "—" : r1(b100.carbs_100g)) + " C · " + (b100.fat_100g == null ? "—" : r1(b100.fat_100g)) +
+          " F — change the grams and the numbers below follow, or type them yourself.</p>");
+      } else {
+        h.push('<p class="muted">Logged without a weight: type the grams to keep them (from then on it works per 100 g).</p>');
       }
       h.push('<div class="row"><label class="field">kcal<input name="kcal" inputmode="decimal" value="' + esc(r0(l.kcal)) + '"></label>' +
         '<label class="field">Protein g<input name="protein" inputmode="decimal" value="' + esc(r1(l.protein_g)) + '"></label></div>' +
@@ -1007,6 +1020,10 @@
       api("/api/nutrition/estimate", { method: "POST", body: { text: s.text } }, ESTIMATE_TIMEOUT_MS).then(function (r) {
         if (SHEET !== s) return;
         s.busy = false; s.items = r.items; s.note = r.note;
+        s.items.forEach(function (it) {     // per 100 g, so changing an item's grams rescales it
+          var gr = +it.grams, f = function (x) { return x == null ? null : x / gr * 100; };
+          it.base = gr > 0 ? { kcal_100g: f(it.kcal), protein_100g: f(it.protein_g), carbs_100g: f(it.carbs_g), fat_100g: f(it.fat_g) } : null;
+        });
         renderSheet();
       }).catch(function (e) {
         if (SHEET !== s) return;
@@ -1028,7 +1045,8 @@
       var meal = val("meal");
       var bad = s.items.some(function (it) {
         return !ok(it.kcal, 0, 20000) || !ok(it.protein_g, 0, 1000) || !it.name ||
-          (it.carbs_g !== null && !ok(it.carbs_g, 0, 3000)) || (it.fat_g !== null && !ok(it.fat_g, 0, 2000));
+          (it.carbs_g !== null && !ok(it.carbs_g, 0, 3000)) || (it.fat_g !== null && !ok(it.fat_g, 0, 2000)) ||
+          (it.grams !== null && !ok(it.grams, 1, 5000));
       });
       if (bad) { s.error = "Check the numbers."; return renderSheet(); }
       var n = s.items.length;
@@ -1081,19 +1099,15 @@
       return addLog(fields, "Added " + (src.description || "entry") + (s.base ? " " + r0(amount) + " g" : amount !== 1 ? " × " + r1(amount) : ""));
     }
     if (act === "edit-save") {
-      var e = LOCAL.logs[s.id], fd = e.food_id && foodsById()[e.food_id];
-      var kk = num("kcal"), pp = num("protein"), cc = num("carbs"), ff = num("fat");
+      var e = LOCAL.logs[s.id];
+      var kk = num("kcal"), pp = num("protein"), cc = num("carbs"), ff = num("fat"), gg = num("grams");
       if (!ok(kk, 0, 20000)) { s.error = "kcal is needed."; return renderSheet(); }
       if ((pp !== null && !ok(pp, 0, 1000)) || (cc !== null && !ok(cc, 0, 3000)) || (ff !== null && !ok(ff, 0, 2000))) {
         s.error = "Check protein, carbs and fat (grams)."; return renderSheet();
       }
-      var gg = fd ? num("grams") : null;
-      if (fd && gg !== e.grams) {          // grams changed: recalculate from the food's label
-        if (!ok(gg, 1, 5000)) { s.error = "Grams?"; return renderSheet(); }
-        Object.assign(e, scale(fd, gg), { grams: gg });
-      } else {                             // the numbers as typed
-        e.kcal = kk; e.protein_g = opt(pp) || 0; e.carbs_g = opt(cc); e.fat_g = opt(ff);
-      }
+      if (gg !== null && !ok(gg, 1, 5000)) { s.error = "Weight: 1–5000 g (or leave it empty)."; return renderSheet(); }
+      // The boxes already hold the recalculated numbers when the grams were changed.
+      e.kcal = kk; e.protein_g = opt(pp) || 0; e.carbs_g = opt(cc); e.fat_g = opt(ff); e.grams = gg;
       e.description = val("name").trim() || e.description;
       e.meal = val("meal");
       if (val("time")) e.time = val("time");
@@ -1136,6 +1150,7 @@
   function readEstimate(s) {
     s.items.forEach(function (it, i) {
       it.name = val("n" + i).trim();
+      it.grams = opt(parseNum(val("g" + i)));
       it.kcal = parseNum(val("k" + i));
       it.protein_g = parseNum(val("p" + i));
       it.carbs_g = opt(parseNum(val("c" + i)));
@@ -1238,7 +1253,30 @@
     var t = e.target.closest("[data-act]");
     if (t && t.tagName !== "INPUT") sheetAction(t.dataset.act, t);
   });
+  function setBox(name, v, nd) {
+    var el = sheetEl.querySelector('[name="' + name + '"]');
+    if (el) el.value = v == null ? "" : nd ? r1(v) : r0(v);
+  }
   sheetEl.addEventListener("input", function (e) {
+    // Edit sheet: new grams -> kcal / protein / carbs / fat follow (per 100 g of the entry).
+    if (e.target.dataset.act === "edit-grams" && SHEET && SHEET.type === "edit" && SHEET.base) {
+      var g = parseNum(e.target.value);
+      if (g && !isNaN(g) && g > 0) {
+        var mv = scale(SHEET.base.per100, g);
+        setBox("kcal", mv.kcal); setBox("protein", mv.protein_g, 1); setBox("carbs", mv.carbs_g, 1); setBox("fat", mv.fat_g, 1);
+      }
+      return;
+    }
+    // "Type it" preview: an item's grams -> its numbers follow.
+    var em = /^g(\d+)$/.exec(e.target.name || "");
+    if (em && SHEET && SHEET.type === "text" && SHEET.items) {
+      var it = SHEET.items[+em[1]], gi = parseNum(e.target.value);
+      if (it && it.base && gi && !isNaN(gi) && gi > 0) {
+        var sv = scale(it.base, gi), i = em[1];
+        setBox("k" + i, sv.kcal); setBox("p" + i, sv.protein_g, 1); setBox("c" + i, sv.carbs_g, 1); setBox("f" + i, sv.fat_g, 1);
+      }
+      return;
+    }
     if (e.target.dataset.act === "pick-amount" && SHEET && SHEET.type === "pick") {
       var a = parseNum(e.target.value);
       if (a && !isNaN(a) && a > 0) {
@@ -1291,9 +1329,28 @@
   window.addEventListener("online", function () { syncNow(); });
   setInterval(function () { syncNow(); }, SYNC_EVERY_MS);
 
+  /* New versions of this page: the service worker installs them in the
+     background; check for one whenever the page comes back to the screen and
+     reload into it (or offer a Reload button while something is being typed),
+     so a page left open for hours doesn't keep running old code. */
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/food/sw.js", { scope: "/food/" }).catch(function (e) {
+    var hadController = !!navigator.serviceWorker.controller, reloading = false;
+    navigator.serviceWorker.register("/food/sw.js", { scope: "/food/" }).then(function (reg) {
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") reg.update().catch(function () { /* offline */ });
+      });
+    }).catch(function (e) {
       console.warn("service worker not registered", e);
+    });
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController) { hadController = true; return; }   // first install, not an update
+      if (reloading) return;
+      var reload = function () { reloading = true; window.location.reload(); };
+      if (SHEET || isTyping() || Object.keys(VIEW.draft || {}).length) {
+        toast("A new version of this page is ready.", [{ label: "Reload", fn: reload }]);
+      } else {
+        reload();
+      }
     });
   }
 

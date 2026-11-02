@@ -117,6 +117,14 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .macro-grid span{background:var(--surface-2); border-radius:12px; padding:8px 8px 7px;}
 .macro-grid b{display:block; font-size:18px; color:var(--ink); font-variant-numeric:tabular-nums;}
 .pick-label{margin:6px 0 0;}
+/* Manual entry: are the numbers for what was eaten, or per 100 g? */
+.basis{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:2px 0 10px;}
+.basis label{position:relative;}
+.basis input{position:absolute; opacity:0; pointer-events:none;}
+.basis span{display:flex; align-items:center; justify-content:center; min-height:44px; border-radius:12px; border:1px solid var(--border);
+  background:var(--surface-2); font-weight:700; font-size:15px; cursor:pointer;}
+.basis input:checked + span{background:var(--teal); border-color:var(--teal); color:#fff;}
+.basis input:focus-visible + span{outline:2px solid var(--accent); outline-offset:2px;}
 .pick-total{margin:10px 0 4px; padding:10px 12px; border-radius:12px; background:var(--teal-soft); color:var(--ink); font-size:14px;}
 .plus{flex:none; width:44px; height:44px; border-radius:12px; background:var(--teal-soft); color:var(--teal-strong); font-size:24px; font-weight:700; display:flex; align-items:center; justify-content:center;}
 .tag{font-size:11px; font-weight:700; border-radius:6px; padding:1px 6px; background:var(--plan-soft); color:var(--plan); margin-left:6px; vertical-align:1px;}

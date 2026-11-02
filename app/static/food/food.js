@@ -824,11 +824,17 @@
       }
     } else if (s.type === "manual") {
       h.push(head("Manual entry"));
+      // The numbers can be for what was eaten, or per 100 g (from a label) -- then the grams give the total.
       h.push('<label class="field">What<input name="name" autocomplete="off" autofocus></label>' +
+        '<label class="field">How much (g)<input name="grams" inputmode="decimal" autocomplete="off" placeholder="weight in grams (optional)"></label>' +
+        '<div class="basis" role="radiogroup" aria-label="The numbers are">' +
+        '<label><input type="radio" name="basis" value="total" checked><span>For what I ate</span></label>' +
+        '<label><input type="radio" name="basis" value="per100"><span>Per 100 g</span></label></div>' +
         '<div class="row"><label class="field">kcal<input name="kcal" inputmode="decimal"></label>' +
         '<label class="field">Protein g<input name="protein" inputmode="decimal"></label></div>' +
         '<div class="row"><label class="field">Carbs g (optional)<input name="carbs" inputmode="decimal"></label>' +
-        '<label class="field">Fat g (optional)<input name="fat" inputmode="decimal"></label></div>' + mealSelect(defaultMeal(nowHHMM())));
+        '<label class="field">Fat g (optional)<input name="fat" inputmode="decimal"></label></div>' +
+        '<p class="pick-total" id="manualCalc" data-test="manual-total" hidden></p>' + mealSelect(defaultMeal(nowHHMM())));
       if (s.error) h.push('<p class="err">' + esc(s.error) + "</p>");
       h.push('<button type="button" class="big-btn" data-act="manual-save">Add</button>');
     } else if (s.type === "scan") {
@@ -1058,12 +1064,15 @@
       return toast("Added " + n + (n === 1 ? " estimated item" : " estimated items"));
     }
     if (act === "manual-save") {
-      var name = val("name").trim(), kcal = num("kcal"), prot = num("protein");
+      var name = val("name").trim(), mv = manualValues();
       if (!name) { s.error = "What was it?"; return renderSheet(); }
-      if (!ok(kcal, 0, 20000)) { s.error = "kcal is needed."; return renderSheet(); }
-      var l = { kcal: kcal, protein_g: opt(prot) || 0, carbs_g: opt(num("carbs")), fat_g: opt(num("fat")), description: name, source: "manual", meal: val("meal") };
+      if (mv.grams !== null && !ok(mv.grams, 1, 5000)) { s.error = "Weight: 1–5000 g (or leave it empty)."; return renderSheet(); }
+      if (mv.per100 && mv.grams === null) { s.error = "Per 100 g needs the weight you ate (g)."; return renderSheet(); }
+      if (!ok(mv.kcal, 0, 20000)) { s.error = "kcal is needed."; return renderSheet(); }
+      var l = { kcal: mv.kcal, protein_g: mv.protein_g || 0, carbs_g: mv.carbs_g, fat_g: mv.fat_g, grams: mv.grams,
+                description: name, source: "manual", meal: val("meal") };
       closeSheet();
-      return addLog(l, "Added " + name);
+      return addLog(l, "Added " + name + (mv.grams ? " " + r0(mv.grams) + " g" : ""));
     }
     if (act === "lookup") return lookup(val("code"));
     if (act === "scan-add") {
@@ -1253,11 +1262,42 @@
     var t = e.target.closest("[data-act]");
     if (t && t.tagName !== "INPUT") sheetAction(t.dataset.act, t);
   });
+  /* Manual entry: the totals to log. With "per 100 g" the typed numbers are
+     scaled by the grams; otherwise they are what was eaten. */
+  function manualValues() {
+    var basisEl = sheetEl.querySelector('[name="basis"]:checked');
+    var per100 = !!basisEl && basisEl.value === "per100", g = opt(num("grams"));
+    var typed = { kcal: num("kcal"), protein_g: opt(num("protein")), carbs_g: opt(num("carbs")), fat_g: opt(num("fat")) };
+    if (per100 && g) {
+      var sv = scale({ kcal_100g: typed.kcal, protein_100g: typed.protein_g, carbs_100g: typed.carbs_g, fat_100g: typed.fat_g }, g);
+      return { per100: true, grams: g, kcal: typed.kcal === null || isNaN(typed.kcal) ? typed.kcal : sv.kcal,
+               protein_g: sv.protein_g, carbs_g: sv.carbs_g, fat_g: sv.fat_g };
+    }
+    return Object.assign({ per100: per100, grams: g }, typed);
+  }
+  function updateManualCalc() {
+    var out = document.getElementById("manualCalc");
+    if (!out) return;
+    var mv = manualValues(), k = mv.kcal;
+    if (k === null || isNaN(k) || !mv.grams) { out.hidden = true; return; }
+    out.hidden = false;
+    if (mv.per100) {
+      out.innerHTML = "For " + r0(mv.grams) + " g: <b>" + r0(k) + " kcal</b> · " + r1(mv.protein_g || 0) + " g protein" +
+        (mv.carbs_g != null ? " · " + r1(mv.carbs_g) + " g carbs" : "") + (mv.fat_g != null ? " · " + r1(mv.fat_g) + " g fat" : "");
+    } else {
+      out.innerHTML = "That's " + r0(k / mv.grams * 100) + " kcal per 100 g.";
+    }
+  }
+
   function setBox(name, v, nd) {
     var el = sheetEl.querySelector('[name="' + name + '"]');
     if (el) el.value = v == null ? "" : nd ? r1(v) : r0(v);
   }
+  sheetEl.addEventListener("change", function (e) {
+    if (e.target.name === "basis" && SHEET && SHEET.type === "manual") updateManualCalc();
+  });
   sheetEl.addEventListener("input", function (e) {
+    if (SHEET && SHEET.type === "manual") { updateManualCalc(); return; }
     // Edit sheet: new grams -> kcal / protein / carbs / fat follow (per 100 g of the entry).
     if (e.target.dataset.act === "edit-grams" && SHEET && SHEET.type === "edit" && SHEET.base) {
       var g = parseNum(e.target.value);

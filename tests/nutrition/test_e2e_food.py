@@ -98,7 +98,6 @@ def test_weights_food_and_offline_sync(server):
         page.click('.chip[data-act="log-meal"]')
         assert _totals(page) == ("370", "44")
         page.click('[data-sheet="manual"]')
-        page.click('.basis >> text=For what I ate')   # totals, no weight (the default is per 100 g)
         page.fill('[name="name"]', "Chicken & rice")
         page.fill('[name="kcal"]', "650")
         page.fill('[name="protein"]', "52")

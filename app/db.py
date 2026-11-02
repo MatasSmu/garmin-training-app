@@ -42,6 +42,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrate_coach_conversations(conn)
     _migrate_gear(conn)
     _migrate_gym_sessions(conn)
+    _migrate_weight_entries(conn)
     conn.commit()
 
 
@@ -76,6 +77,14 @@ def _migrate_gym_sessions(conn: sqlite3.Connection) -> None:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(gym_sessions)")}
     if "garmin_time_dismissed" not in cols:
         conn.execute("ALTER TABLE gym_sessions ADD COLUMN garmin_time_dismissed INTEGER")
+
+
+def _migrate_weight_entries(conn: sqlite3.Connection) -> None:
+    """Weigh-ins from before the sheet import get score and time columns (additive only)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(weight_entries)")}
+    for name in ("score REAL", "time TEXT"):
+        if name.split()[0] not in cols:
+            conn.execute(f"ALTER TABLE weight_entries ADD COLUMN {name}")
 
 
 def _migrate_gear(conn: sqlite3.Connection) -> None:

@@ -147,6 +147,20 @@ input, select, textarea{font:inherit; color:var(--ink);}
 .big-btn.ghost{background:var(--surface-2); color:var(--ink);}
 .big-btn.danger{background:var(--accent-soft); color:var(--accent);}
 
+/* ---- check-in ---- */
+.ci-date{min-height:40px; border:1px solid var(--border); border-radius:10px; padding:4px 8px; background:var(--surface);}
+.seg{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:4px 0 10px;}
+.seg-btn{min-height:44px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); font-weight:700;}
+.seg-btn.active{background:var(--teal); border-color:var(--teal); color:#fff;}
+.ci-row{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.ci-row label, .ci-note{display:block; font-size:13px; color:var(--ink-muted); font-weight:600;}
+.ci-row input, .ci-note textarea{
+  display:block; width:100%; box-sizing:border-box; margin-top:4px; min-height:48px; border:1px solid var(--border);
+  border-radius:12px; padding:8px 12px; font-size:18px; background:var(--surface);
+}
+.ci-note{margin-top:10px;}
+.ci-note textarea{font-size:16px; resize:vertical;}
+
 /* ---- week ---- */
 .wk{border-top:1px solid var(--border); padding:10px 0;}
 .wk:first-of-type{border-top:0;}

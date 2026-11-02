@@ -29,7 +29,7 @@
   var sheetBack = document.getElementById("sheetBack");
   var BOOT = null;                         // cached /api/nutrition/bootstrap
   var LOCAL = { logs: {}, foods: {}, meals: {}, weights: {} };
-  var VIEW = { view: "today", date: null, week: null, draft: {} };
+  var VIEW = { view: "today", date: null, week: null, draft: {}, ci: null };
   var SHEET = null;
   var sync = { busy: false, error: null, timer: null };
 
@@ -503,9 +503,62 @@
       (w.evening_diff_kg != null ? '<p class="muted">Evening is ' + signed(w.evening_diff_kg, 1) + " kg vs morning on average (info only; the trend uses mornings).</p>" : "") +
       (pendingW ? '<p class="muted">New weights are saved on the phone; the trend updates after they sync.</p>' : "") + "</div>");
     var chart = window.WeightChart && w.days && w.days.length ? WeightChart.svg(w, { today: today(), width: 400, height: 230 }) : "";
+    h.push(checkinCard());
     if (chart) h.push('<div class="card">' + chart + "</div>");
     h.push(gridCard());
     return h.join("");
+  }
+
+  /* One weigh-in with how you feel: weight, score and note (the same fields
+     the Google Sheet import fills). Sent with the weights; a grid save only
+     sends the weight, so it never clears a score or note. */
+  function weightRec(key) {
+    var out = null;
+    ((BOOT && BOOT.weights) || []).forEach(function (w) { if (w.date + "|" + w.slot === key) out = w; });
+    if (LOCAL.weights[key]) out = Object.assign({}, out || {}, LOCAL.weights[key]);
+    return out && out.weight_kg != null ? out : null;
+  }
+  function nowHHMM() {
+    var d = new Date();
+    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
+  function ciLoad(d, slot) {
+    var r = weightRec(d + "|" + slot) || {};
+    return { date: d, slot: slot, w: r.weight_kg != null ? String(r.weight_kg) : "", score: r.score != null ? String(r.score) : "",
+      note: r.note || "", time: r.time || null };
+  }
+  function checkinCard() {
+    if (!VIEW.ci) VIEW.ci = ciLoad(today(), new Date().getHours() < 14 ? "morning" : "evening");
+    var c = VIEW.ci, saved = weightRec(c.date + "|" + c.slot);
+    return '<div class="card" data-test="checkin"><div class="card-head"><h2>Check-in</h2>' +
+      '<input type="date" class="ci-date" data-ci="date" max="' + today() + '" value="' + esc(c.date) + '" aria-label="Check-in date"></div>' +
+      '<div class="seg">' + ["morning", "evening"].map(function (sl) {
+        return '<button type="button" class="seg-btn' + (c.slot === sl ? " active" : "") + '" data-act="ci-slot" data-slot="' + sl + '">' +
+          (sl === "morning" ? "Morning" : "Evening") + "</button>";
+      }).join("") + "</div>" +
+      '<div class="ci-row"><label>Weight kg<input type="text" inputmode="decimal" autocomplete="off" data-ci="w" value="' + esc(c.w) + '"></label>' +
+      '<label>Score<input type="text" inputmode="decimal" autocomplete="off" data-ci="score" value="' + esc(c.score) + '"></label></div>' +
+      '<label class="ci-note">Note<textarea data-ci="note" rows="2" maxlength="1000">' + esc(c.note) + "</textarea></label>" +
+      '<p class="muted" id="ciMsg">' + (saved ? "Saved" + (saved.time ? " at " + esc(saved.time) : "") + " — saving again updates it."
+        : "Score and note are optional.") + "</p>" +
+      '<button type="button" class="big-btn" data-act="ci-save">Save check-in</button></div>';
+  }
+  function saveCheckin() {
+    var c = VIEW.ci, msg = document.getElementById("ciMsg");
+    var w = parseNum(c.w), sc = parseNum(c.score);
+    if (w === null || isNaN(w) || w < 25 || w > 250) { msg.textContent = "Type a weight between 25 and 250 kg."; msg.className = "err"; return; }
+    if (sc !== null && (isNaN(sc) || Math.abs(sc) > 1000)) { msg.textContent = "The score must be a number."; msg.className = "err"; return; }
+    var key = c.date + "|" + c.slot;
+    var rec = LOCAL.weights[key] || { key: key, date: c.date, slot: c.slot };
+    rec.weight_kg = Math.round(w * 100) / 100;
+    rec.score = sc;
+    rec.note = c.note.trim() || null;
+    rec.time = c.time || (c.date === today() ? nowHHMM() : null);
+    put("weights", rec);
+    VIEW.ci = ciLoad(c.date, c.slot);
+    render();
+    toast("Check-in saved");
+    scheduleSync(0);
   }
 
   function gridCard() {
@@ -983,6 +1036,11 @@
       openSheet({ type: "meals" });
     } else if (act === "save-week") {
       saveWeek();
+    } else if (act === "ci-slot") {
+      VIEW.ci = ciLoad(VIEW.ci.date, t.dataset.slot);
+      render();
+    } else if (act === "ci-save") {
+      saveCheckin();
     }
   });
 
@@ -994,7 +1052,15 @@
       else delete VIEW.draft[inp.dataset.key];
     });
   }
+  main.addEventListener("change", function (e) {
+    if (e.target.dataset.ci === "date" && e.target.value && e.target.value <= today()) {
+      VIEW.ci = ciLoad(e.target.value, VIEW.ci.slot);
+      render();
+    }
+  });
   main.addEventListener("input", function (e) {
+    var f = e.target.dataset && e.target.dataset.ci;
+    if (f && f !== "date" && VIEW.ci) VIEW.ci[f] = e.target.value;
     if (e.target.classList.contains("w-in")) {
       var vals = weightsMap(), key = e.target.dataset.key, cur = vals[key] != null ? String(vals[key]) : "";
       if (e.target.value !== cur) VIEW.draft[key] = e.target.value; else delete VIEW.draft[key];

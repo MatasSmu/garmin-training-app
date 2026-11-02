@@ -7,13 +7,17 @@ from pathlib import Path
 
 # Before anything imports app.config: importing app.main runs init_db on
 # config.DB_PATH, and tests must never open the real data/garmin.db.
-os.environ["APP_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="garmin-tests-")) / "app.db")
+_TMP = Path(tempfile.mkdtemp(prefix="garmin-tests-"))
+os.environ["APP_DB_PATH"] = str(_TMP / "app.db")
+# No Google Sheet auto-import thread, and never the real service-account key.
+os.environ["SHEETS_IMPORT_MINUTES"] = "0"
+os.environ["GOOGLE_SERVICE_ACCOUNT_FILE"] = str(_TMP / "no-google-key.json")
 
 import pytest  # noqa: E402
 
 from app import config  # noqa: E402
 from app.coach import wind as coach_wind  # noqa: E402
-from app.nutrition import openfoodfacts  # noqa: E402
+from app.nutrition import openfoodfacts, sheets  # noqa: E402
 from app.sailing import deepseek  # noqa: E402
 
 
@@ -41,3 +45,11 @@ def no_real_openfoodfacts(monkeypatch):
         raise AssertionError("tests must not call Open Food Facts")
 
     monkeypatch.setattr(openfoodfacts, "fetch_product", refuse)
+
+
+@pytest.fixture(autouse=True)
+def no_real_google(monkeypatch):
+    def refuse(*a, **k):
+        raise AssertionError("tests must not call Google")
+
+    monkeypatch.setattr(sheets, "_get", refuse)

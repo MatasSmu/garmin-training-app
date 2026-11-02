@@ -14,7 +14,7 @@ from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 from app.api.deps import get_db
 from app.nutrition import estimate as estimator
-from app.nutrition import openfoodfacts, store
+from app.nutrition import openfoodfacts, sheets, store
 from app.sailing import deepseek
 
 router = APIRouter(tags=["nutrition"])
@@ -42,8 +42,15 @@ class WeightIn(BaseModel):
     date: DateStr
     slot: Literal["morning", "evening"]
     weight_kg: float | None = Field(default=None, ge=20, le=300)
-    note: str | None = Field(default=None, max_length=200)
+    note: str | None = Field(default=None, max_length=1000)
+    score: float | None = Field(default=None, ge=-1000, le=1000)
+    time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
     updated_at: Timestamp = None
+
+
+def _weight_dicts(weights: list[WeightIn]) -> list[dict]:
+    # Only the fields the client sent: an omitted note/score/time keeps the stored one.
+    return [w.model_dump(exclude_unset=True) for w in weights]
 
 
 class WeightBatch(BaseModel):
@@ -155,7 +162,9 @@ def post_sync(payload: SyncIn, conn: sqlite3.Connection = Depends(get_db)):
     for m in payload.saved_meals:
         if not m.id:
             raise HTTPException(422, "every synced saved meal needs an id")
-    return store.sync(conn, payload.model_dump())
+    data = payload.model_dump()
+    data["weights"] = _weight_dicts(payload.weights)
+    return store.sync(conn, data)
 
 
 @router.get("/api/nutrition/summary")
@@ -176,13 +185,48 @@ def get_weights(start: str | None = None, end: str | None = None, conn: sqlite3.
 @router.put("/api/nutrition/weights")
 def put_weights(payload: WeightBatch, conn: sqlite3.Connection = Depends(get_db)):
     """Batch save, e.g. a week typed in from paper. weight_kg null clears that cell."""
-    results = store.save_weights(conn, [e.model_dump() for e in payload.entries])
+    results = store.save_weights(conn, _weight_dicts(payload.entries))
     return {"results": results, "weight": store.weight_analysis(conn)}
 
 
 @router.get("/api/nutrition/weight")
 def get_weight_analysis(conn: sqlite3.Connection = Depends(get_db)):
     return store.weight_analysis(conn)
+
+
+class SheetConfigIn(BaseModel):
+    url: str = Field(min_length=10, max_length=500)
+    tab: str | None = Field(default=None, max_length=100)
+
+
+@router.get("/api/nutrition/sheet")
+def get_sheet_status(conn: sqlite3.Connection = Depends(get_db)):
+    """Google Sheet import: key / link status, the service-account e-mail to share with, last result."""
+    return sheets.status(conn)
+
+
+@router.put("/api/nutrition/sheet")
+def put_sheet_config(payload: SheetConfigIn, conn: sqlite3.Connection = Depends(get_db)):
+    try:
+        sheets.save_config(conn, payload.url, payload.tab)
+    except sheets.SheetError as e:
+        raise HTTPException(422, str(e)) from e
+    return sheets.status(conn)
+
+
+@router.post("/api/nutrition/sheet/import")
+def post_sheet_import(conn: sqlite3.Connection = Depends(get_db)):
+    """Import now (a few seconds); the auto-import does the same every few minutes."""
+    result = sheets.run_import(conn)
+    return {"result": result, "status": sheets.status(conn)}
+
+
+@router.get("/api/nutrition/checkins")
+def get_checkins(days: int = 60, conn: sqlite3.Connection = Depends(get_db)):
+    """Recent weigh-ins with time, morning score and note, newest first."""
+    start = (date.today().toordinal() - max(1, min(days, 3650)))
+    rows = store.list_weights(conn, date.fromordinal(start).isoformat())
+    return list(reversed(rows))
 
 
 @router.get("/api/nutrition/day/{day}")

@@ -12,6 +12,7 @@ from app.api import (
 )
 from app.auth import require_auth
 from app.db import get_connection, init_db
+from app.nutrition import sheets
 
 STATIC_DIR = Path(__file__).with_name("static")
 
@@ -32,6 +33,8 @@ async def no_stale_assets(request, call_next):
     return response
 
 init_db(get_connection())
+# Pulls new weigh-ins from the athlete's Google Sheet every few minutes (no-op until set up).
+sheets.start_auto_import()
 
 app.include_router(sessions.router)
 app.include_router(metrics.router)

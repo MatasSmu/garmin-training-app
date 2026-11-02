@@ -20,13 +20,17 @@
   function load() {
     root.textContent = "";
     root.appendChild(el("p", { class: "tk-msg", text: "Loading…" }));
-    TK.api("/api/nutrition/summary").then(function (s) {
+    Promise.all([TK.api("/api/nutrition/summary"), TK.api("/api/nutrition/checkins?days=60"),
+      TK.api("/api/nutrition/sheet").catch(function () { return null; })]).then(function (r) {
+      var s = r[0];
       root.textContent = "";
       root.appendChild(headPanel(s));
       root.appendChild(weightPanel(s.weight));
+      root.appendChild(checkinsPanel(r[1]));
       root.appendChild(energyPanel(s));
       root.appendChild(daysPanel(s));
       root.appendChild(weeksPanel(s.weeks));
+      if (r[2]) root.appendChild(sheetPanel(r[2]));
     }).catch(function (e) {
       root.textContent = "";
       root.appendChild(el("p", { class: "tk-msg err", text: "Couldn't load nutrition data: " + e.message }));
@@ -107,6 +111,77 @@
       { key: "trend_change_kg", label: "Trend Δ kg", num: true, fmt: function (r) { return signed(r.trend_change_kg, 2); } },
       { key: "status", label: "Status", sortable: false, fmt: function (r) { return r.status_label; } },
     ], weeks, { sortKey: "week_start", sortDir: -1, empty: "No data yet." })]);
+  }
+
+  function checkinsPanel(rows) {
+    var hasExtra = rows.some(function (r) { return r.score != null || r.note; });
+    return TK.panel("Check-ins", "Last 60 days of weigh-ins with how you felt — from the phone check-in card and your Google Sheet.", [TK.table([
+      { key: "date", label: "Day", fmt: function (r) { return fmtDate(r.date); } },
+      { key: "slot", label: "When", fmt: function (r) { return (r.slot === "morning" ? "Morning" : "Evening") + (r.time ? " " + r.time : ""); } },
+      { key: "weight_kg", label: "kg", num: true, fmt: function (r) { return r.weight_kg.toFixed(1); } },
+      { key: "score", label: "Score", num: true, fmt: function (r) { return r.score != null ? String(r.score) : "—"; } },
+      { key: "note", label: "Note", sortable: false, fmt: function (r) { return r.note || ""; } },
+    ], rows, { sortKey: "date", sortDir: -1, empty: "No weigh-ins yet." })].concat(
+      rows.length && !hasExtra ? [el("p", { class: "panel-sub", text: "No scores or notes yet — add them on the phone or in the sheet." })] : []));
+  }
+
+  function fmtWhen(iso) {
+    return iso ? new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  }
+
+  /* Google Sheet import settings: the service-account e-mail to share the
+     sheet with, the sheet link, the last result and Import now. */
+  function sheetPanel(st) {
+    var kids = [];
+    var msg = el("p", { class: "panel-sub", "data-test": "sheet-msg" });
+    if (!st.key_present) {
+      kids.push(el("p", { class: "nut-advice", text: "Not set up yet: save the Google service-account JSON key as " + st.key_path +
+        " (see docs/google-sheet-import.md), then reload this tab." }));
+    } else if (st.key_error) {
+      kids.push(el("p", { class: "tk-msg err", text: st.key_error }));
+    } else {
+      kids.push(el("p", null, ["Share your sheet (Share → Viewer) with ", el("b", { class: "mono", text: st.service_account_email }), " ",
+        el("button", { type: "button", class: "btn-ghost", text: "Copy", onclick: function (e) {
+          navigator.clipboard.writeText(st.service_account_email).then(function () { e.target.textContent = "Copied"; });
+        } })]));
+    }
+    var url = el("input", { type: "text", placeholder: "https://docs.google.com/spreadsheets/d/…", value: st.sheet_url || "", "aria-label": "Sheet link" });
+    var tab = el("input", { type: "text", placeholder: "Tab (optional)", value: st.tab || "", "aria-label": "Tab name", class: "sheet-tab" });
+    var save = el("button", { type: "button", class: "btn-primary", text: "Save link", onclick: function () {
+      msg.className = "panel-sub"; msg.textContent = "Saving…";
+      TK.api("/api/nutrition/sheet", { method: "PUT", body: { url: url.value, tab: tab.value || null } }).then(function () {
+        return runImport();
+      }).catch(function (e) { msg.className = "tk-msg err"; msg.textContent = e.message; });
+    } });
+    var imp = el("button", { type: "button", class: "btn-primary", text: "Import now", disabled: !st.configured || !st.key_present,
+      onclick: function () { runImport(); } });
+    function runImport() {
+      imp.disabled = true; msg.className = "panel-sub"; msg.textContent = "Importing…";
+      return TK.api("/api/nutrition/sheet/import", { method: "POST" }).then(function (r) {
+        if (r.result.ok) load(); else { showLast(r.result); imp.disabled = false; }
+      }).catch(function (e) { msg.className = "tk-msg err"; msg.textContent = e.message; imp.disabled = false; });
+    }
+    function showLast(last) {
+      if (!last) { msg.textContent = st.configured ? "Not imported yet." : ""; return; }
+      msg.className = last.ok ? "panel-sub" : "tk-msg err";
+      msg.textContent = (last.ok ? "Last import " : "Last import failed ") + fmtWhen(last.finished_at) +
+        (last.source === "auto" ? " (auto)" : "") + ": " + last.message;
+    }
+    kids.push(el("div", { class: "plan-actions sheet-form" }, [url, tab, save, imp]));
+    showLast(st.last);
+    kids.push(msg);
+    var last = st.last;
+    if (last && last.ok && last.skipped && last.skipped.length) {
+      kids.push(el("details", null, [el("summary", { text: last.skipped_count + " rows skipped" }),
+        el("ul", null, last.skipped.map(function (x) { return el("li", { text: "Row " + x.row + ": " + x.reason }); }))]));
+    }
+    if (last && last.ok && last.columns) {
+      kids.push(el("p", { class: "panel-sub", text: "Columns used: " + Object.keys(last.columns).map(function (k) {
+        return k + " = “" + last.columns[k] + "”"; }).join(", ") + "." }));
+    }
+    return TK.panel("Google Sheet import", "Reads date, time, weight, morning score and note from your private sheet" +
+      (st.interval_minutes > 0 ? ", automatically every " + st.interval_minutes + " min" : "") +
+      ". New and changed rows are added; nothing in the app is deleted.", kids, { "data-test": "sheet-panel" });
   }
 
   tabBtn.addEventListener("click", load);

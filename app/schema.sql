@@ -361,6 +361,8 @@ CREATE TABLE IF NOT EXISTS weight_entries (
   slot               TEXT NOT NULL CHECK (slot IN ('morning', 'evening')),
   weight_kg          REAL NOT NULL,
   note               TEXT,
+  score              REAL,                   -- how the athlete feels (from the sheet or the check-in card)
+  time               TEXT,                   -- HH:MM of the weigh-in, when known
   client_updated_at  TEXT NOT NULL,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL,
@@ -430,3 +432,18 @@ CREATE TABLE IF NOT EXISTS food_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(date);
 CREATE INDEX IF NOT EXISTS idx_food_logs_food ON food_logs(food_id);
+
+-- Google Sheet import: which sheet, and the last imported content of each
+-- date + slot so an unchanged sheet row never overwrites an edit made in the app.
+CREATE TABLE IF NOT EXISTS app_settings (
+  key    TEXT PRIMARY KEY,
+  value  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sheet_import_rows (
+  date         TEXT NOT NULL,
+  slot         TEXT NOT NULL,
+  row_hash     TEXT NOT NULL,
+  imported_at  TEXT NOT NULL,
+  PRIMARY KEY (date, slot)
+);

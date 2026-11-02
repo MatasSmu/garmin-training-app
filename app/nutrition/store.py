@@ -71,10 +71,14 @@ def targets(conn: sqlite3.Connection) -> dict:
 # --------------------------------------------------------------------- weights
 
 
+KEEP = object()   # upsert_weight: leave this field as it is
+
+
 def upsert_weight(conn: sqlite3.Connection, day: str, slot: str, weight_kg: float | None,
-                  updated_at: str | None = None, note: str | None = None) -> str:
+                  updated_at: str | None = None, note=KEEP, score=KEEP, time=KEEP) -> str:
     """One entry per date + slot; re-entering updates it, None deletes it.
-    Returns 'created' | 'updated' | 'deleted' | 'unchanged' | 'stale'."""
+    note / score / time left as KEEP keep what is stored (the weight grid only
+    sends weights). Returns 'created' | 'updated' | 'deleted' | 'unchanged' | 'stale'."""
     if slot not in SLOTS:
         raise ValueError(f"slot must be one of {SLOTS}")
     day = date.fromisoformat(day).isoformat()
@@ -88,32 +92,40 @@ def upsert_weight(conn: sqlite3.Connection, day: str, slot: str, weight_kg: floa
         conn.execute("DELETE FROM weight_entries WHERE id = ?", (row["id"],))
         return "deleted"
     weight_kg = round(float(weight_kg), 2)
-    note = (note or "").strip() or None
-    if row is not None and row["weight_kg"] == weight_kg and row["note"] == note:
+    note = (row["note"] if row is not None else None) if note is KEEP else ((note or "").strip() or None)
+    score = (row["score"] if row is not None else None) if score is KEEP else (round(float(score), 2) if score is not None else None)
+    time = (row["time"] if row is not None else None) if time is KEEP else (time or None)
+    if row is not None and (row["weight_kg"], row["note"], row["score"], row["time"]) == (weight_kg, note, score, time):
         return "unchanged"
     now = _now_ms()
     conn.execute(
-        """INSERT INTO weight_entries (id, date, slot, weight_kg, note, client_updated_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO weight_entries (id, date, slot, weight_kg, note, score, time, client_updated_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(date, slot) DO UPDATE SET weight_kg = excluded.weight_kg, note = excluded.note,
+             score = excluded.score, time = excluded.time,
              client_updated_at = excluded.client_updated_at, updated_at = excluded.updated_at""",
-        (str(uuid.uuid4()), day, slot, weight_kg, note, incoming, now, now),
+        (str(uuid.uuid4()), day, slot, weight_kg, note, score, time, incoming, now, now),
     )
     return "updated" if row is not None else "created"
 
 
+def _upsert_weight_dict(conn: sqlite3.Connection, e: dict) -> str:
+    extra = {k: e[k] for k in ("note", "score", "time") if k in e}
+    return upsert_weight(conn, e["date"], e["slot"], e.get("weight_kg"), e.get("updated_at"), **extra)
+
+
 def save_weights(conn: sqlite3.Connection, entries: list[dict]) -> dict:
-    """Batch save (the week grid). Each entry: {date, slot, weight_kg|None, updated_at?, note?}."""
+    """Batch save (the week grid). Each entry: {date, slot, weight_kg|None, updated_at?, note?, score?, time?};
+    a key that is missing keeps the stored value."""
     results = {}
     for e in entries:
-        results[f"{e['date']}|{e['slot']}"] = upsert_weight(
-            conn, e["date"], e["slot"], e.get("weight_kg"), e.get("updated_at"), e.get("note"))
+        results[f"{e['date']}|{e['slot']}"] = _upsert_weight_dict(conn, e)
     conn.commit()
     return results
 
 
 def list_weights(conn: sqlite3.Connection, start: str | None = None, end: str | None = None) -> list[dict]:
-    q, params = "SELECT date, slot, weight_kg, note, client_updated_at AS updated_at FROM weight_entries", []
+    q, params = "SELECT date, slot, weight_kg, note, score, time, client_updated_at AS updated_at FROM weight_entries", []
     clauses = []
     if start:
         clauses.append("date >= ?")
@@ -428,8 +440,7 @@ def sync(conn: sqlite3.Connection, payload: dict) -> dict:
     for entry in payload.get("logs", []):
         results["logs"][entry["id"]] = upsert_log(conn, entry)
     for w in payload.get("weights", []):
-        results["weights"][f"{w['date']}|{w['slot']}"] = upsert_weight(
-            conn, w["date"], w["slot"], w.get("weight_kg"), w.get("updated_at"), w.get("note"))
+        results["weights"][f"{w['date']}|{w['slot']}"] = _upsert_weight_dict(conn, w)
     conn.commit()
     return {"results": results}
 

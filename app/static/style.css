@@ -31,6 +31,8 @@
   --wash-4:rgba(232,103,74,.14);
   --veil-top:rgba(232,242,246,.42);
   --veil-bottom:rgba(232,242,246,.86);
+  --photo-veil-top:rgba(232,242,246,.40);
+  --photo-veil-bottom:rgba(232,242,246,.22);
   --radius:20px;
   --shadow: 0 1px 2px rgba(11,37,51,.05), 0 12px 32px -16px rgba(8,78,104,.28);
 }
@@ -64,6 +66,8 @@
     --wash-4:rgba(232,103,74,.10);
     --veil-top:rgba(6,32,43,.55);
     --veil-bottom:rgba(6,32,43,.9);
+    --photo-veil-top:rgba(6,32,43,.55);
+    --photo-veil-bottom:rgba(6,32,43,.42);
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
   }
 }
@@ -96,6 +100,8 @@
   --wash-4:rgba(232,103,74,.10);
   --veil-top:rgba(6,32,43,.55);
   --veil-bottom:rgba(6,32,43,.9);
+  --photo-veil-top:rgba(6,32,43,.55);
+  --photo-veil-bottom:rgba(6,32,43,.42);
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
 }
 
@@ -120,16 +126,18 @@ body::before{
     radial-gradient(45% 35% at 12% 88%, var(--wash-4), transparent 70%),
     var(--bg);
 }
+/* With a photo: a light, even veil so the photo shows over the whole page;
+   the frosted cards keep the text readable. */
 body.has-photo::before{
   background:
-    linear-gradient(180deg, var(--veil-top) 0, var(--veil-bottom) 520px),
-    var(--bg-photo) center 30% / cover no-repeat,
+    linear-gradient(180deg, var(--photo-veil-top) 0, var(--photo-veil-bottom) 100%),
+    var(--bg-photo) center 35% / cover no-repeat,
     var(--bg);
 }
 h1,h2,h3{font-family:"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif; text-wrap:balance; margin:0; letter-spacing:-.015em;}
 .mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace; font-variant-numeric:tabular-nums;}
 
-.page{max-width:1120px; margin:0 auto; padding:36px 24px 64px;}
+.page{max-width:1320px; margin:0 auto; padding:36px 32px 64px;}
 
 .masthead{
   display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
@@ -140,7 +148,8 @@ h1,h2,h3{font-family:"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif; 
   color:var(--teal-strong); margin:0 0 6px;
 }
 .masthead-title h1{font-size:clamp(28px,4.6vw,40px); font-weight:800; letter-spacing:-.025em; color:var(--ink);}
-body.has-photo .masthead-title h1, body.has-photo .masthead-title .eyebrow{text-shadow:0 1px 12px var(--veil-bottom);}
+body.has-photo .masthead-title h1, body.has-photo .masthead-title .eyebrow, body.has-photo .sync-status{text-shadow:0 0 6px var(--veil-bottom), 0 1px 14px var(--veil-bottom);}
+body.has-photo .sync-status{color:var(--ink); font-weight:600;}
 
 /* ---- sync button (masthead, top right) ---- */
 .sync-box{display:flex; flex-direction:column; align-items:flex-end; gap:6px; margin-left:auto;}

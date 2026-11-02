@@ -72,7 +72,7 @@ def test_parse_rows_slots_from_time_order_and_words():
 
 
 def test_parse_rows_without_header_is_a_clear_error():
-    with pytest.raises(sheets.SheetError, match="header row"):
+    with pytest.raises(sheets.SheetError, match="date and a weight column"):
         sheets.parse_rows([["a", "b"], [1, 2]])
 
 
@@ -161,3 +161,41 @@ def test_import_reports_google_errors(conn, monkeypatch):
     res = sheets.run_import(conn)
     assert res["ok"] is False and "share the sheet" in res["message"]
     assert sheets.get_setting(conn, "sheet_last_import")["ok"] is False
+
+
+# The athlete's real layout: weight, date, time, score, note -- no header row.
+REAL_ROWS = [
+    ["80.4", "2026-09-04", "22:40", "", "(ryte atsisėdimai)"],
+    ["79.7", "2026-09-05", "07:24", "8.9", "neblogai išsimiegojau"],
+    ["79.9", "2026-09-06", "23:04", "", "pavargęs, gerai"],
+]
+EXPECTED = [
+    ("2026-09-04", "evening", "22:40", 80.4, None, "(ryte atsisėdimai)"),
+    ("2026-09-05", "morning", "07:24", 79.7, 8.9, "neblogai išsimiegojau"),
+    ("2026-09-06", "evening", "23:04", 79.9, None, "pavargęs, gerai"),
+]
+
+
+def _serial(iso):
+    return (date.fromisoformat(iso) - sheets.EPOCH).days
+
+
+@pytest.mark.parametrize("rows, first_col_name", [
+    (REAL_ROWS, "column A"),
+    # What the Sheets API returns for real date/time/number cells (UNFORMATTED_VALUE).
+    ([[80.4, _serial("2026-09-04"), 22 / 24 + 40 / 1440, "", "(ryte atsisėdimai)"],
+      [79.7, _serial("2026-09-05"), 7 / 24 + 24 / 1440, 8.9, "neblogai išsimiegojau"],
+      [79.9, _serial("2026-09-06"), 23 / 24 + 4 / 1440]], "column A"),
+    # A header row whose words the importer doesn't know is ignored.
+    ([["Kg?", "Kada", "Val", "Kaip", "Kita"]] + REAL_ROWS, "column A"),
+    # A known header for some columns; the rest are recognised from content.
+    ([["Svoris", "Data", "", "", ""]] + REAL_ROWS, "Svoris"),
+])
+def test_columns_recognised_from_content(rows, first_col_name):
+    entries, skipped, cols = sheets.parse_rows(rows)
+    assert skipped == []
+    assert cols["weight"] == first_col_name
+    assert (cols["time"], cols["score"], cols["note"]) == ("column C", "column D", "column E")
+    got = sorted((e["date"], e["slot"], e["time"], e["weight_kg"], e["score"], e["note"]) for e in entries)
+    expected = EXPECTED if len(rows[-1]) == 5 else EXPECTED[:2] + [EXPECTED[2][:5] + (None,)]
+    assert got == expected

@@ -175,7 +175,7 @@ def fetch(cfg: dict) -> tuple[list[list], str, str]:
 
 # Checked in this order; the first field whose keyword is in the header wins.
 FIELDS = [
-    ("score", ("score", "feel", "mood", "savijaut", "rating", "balas", "ivertin", "energ", "readiness", "jaucias")),
+    ("score", ("score", "feel", "mood", "savijaut", "rating", "balas", "ivertin", "energ", "readiness", "jauc")),
     ("note", ("note", "pastab", "komentar", "comment", "remark", "pasta")),
     ("weight", ("weight", "svor", "kg", "mass")),
     ("date", ("date", "data", "diena", "timestamp", "laiko zyma", "day")),
@@ -205,14 +205,77 @@ def find_columns(header: list) -> dict[str, int]:
     return cols
 
 
-def _find_header(rows: list[list]) -> tuple[int, dict[str, int]]:
+def _kind(v) -> str | None:
+    """What a cell looks like: date | time | weight | score | text."""
+    if isinstance(v, bool) or v in (None, "") or not str(v).strip():
+        return None
+    if parse_date(v)[0] is not None:
+        return "date"
+    if isinstance(v, (int, float)):
+        n = float(v)
+        if 0 <= n < 1:
+            return "time"                      # Sheets stores 07:24 as 0.308
+    else:
+        s = str(v).strip()
+        if re.fullmatch(r"\d{1,2}[:.]\d{2}(?:[:.]\d{2})?(?:\s*[ap]\.?m\.?)?", s, re.I) and _parse_time_str(s):
+            return "time"
+        if not re.fullmatch(r"-?\d+(?:[.,]\d+)?(?:\s*(?:kg|/\s*10))?", s, re.I):
+            return "text"
+        n = parse_number(s)
+    return "weight" if MIN_KG <= n <= MAX_KG else "score" if -100 <= n < MIN_KG else None
+
+
+def _infer_columns(rows: list[list], taken: dict[str, int]) -> dict[str, int]:
+    """Columns for the fields not named by a header, from what the cells hold:
+    weights of 25-250, dates, times, small numbers (score) and text (note)."""
+    counts: dict[int, dict[str, int]] = {}
+    for r in rows[:300]:
+        for i, v in enumerate(r):
+            k = _kind(v)
+            if k:
+                counts.setdefault(i, {}).setdefault(k, 0)
+                counts[i][k] += 1
+    cols = dict(taken)
+    for field in ("date", "weight", "time", "score", "note"):
+        if field in cols:
+            continue
+        kind = "text" if field == "note" else field
+        free = [i for i in counts if i not in cols.values() and counts[i].get(kind)]
+        if field != "note":   # a data column must be mostly that kind; notes can be anything
+            free = [i for i in free if counts[i][kind] >= 0.6 * sum(counts[i].values())]
+        if free:
+            cols[field] = max(free, key=lambda i: counts[i][kind])
+    return cols
+
+
+def _col_letter(i: int) -> str:
+    s = ""
+    i += 1
+    while i:
+        i, rem = divmod(i - 1, 26)
+        s = chr(65 + rem) + s
+    return s
+
+
+def _find_header(rows: list[list]) -> tuple[int, dict[str, int], dict[str, str]]:
+    """(header row index or -1, {field: column}, {field: header text or 'column X'}).
+    Headers (English/Lithuanian) win; anything they don't name, or a sheet
+    with no header row at all, is recognised from the cell contents."""
     for i, row in enumerate(rows[:HEADER_SCAN_ROWS]):
-        cols = find_columns(row)
-        if "date" in cols and "weight" in cols:
-            return i, cols
-    seen = " | ".join(str(c) for c in (rows[0] if rows else []))
-    raise SheetError("Couldn't find the header row with a Date and a Weight column "
-                     f"(first row is: {seen or 'empty'}).")
+        named = find_columns(row)
+        if "date" in named and "weight" in named:
+            cols = _infer_columns(rows[i + 1:], named)
+            return i, cols, {f: str(row[c]) if f in named else f"column {_col_letter(c)}" for f, c in cols.items()}
+    cols = _infer_columns(rows, {})
+    if "date" not in cols or "weight" not in cols:
+        seen = " | ".join(str(c) for c in (rows[0] if rows else []))
+        raise SheetError("Couldn't find a date and a weight column in the sheet "
+                         f"(first row is: {seen or 'empty'}).")
+    # Rows above the first one with a date (a title, unrecognised headers) are ignored.
+    first = next(i for i, r in enumerate(rows) if cols["date"] < len(r) and parse_date(r[cols["date"]])[0])
+    if first:   # count again without the rows above, so header words don't blur the columns
+        cols = _infer_columns(rows[first:], {}) | {"date": cols["date"]}
+    return first - 1, cols, {f: f"column {_col_letter(c)}" for f, c in cols.items()}
 
 
 def _hhmm(fraction: float) -> str:
@@ -288,8 +351,7 @@ def parse_number(v) -> float | None:
 
 def parse_rows(rows: list[list], locale: str = "") -> tuple[list[dict], list[dict], dict[str, int]]:
     """(entries, skipped, {field: header text}). Entries: {date, slot, weight_kg, score, note, time, row}."""
-    h, cols = _find_header(rows)
-    names = {f: str(rows[h][i]) for f, i in cols.items()}
+    h, cols, names = _find_header(rows)
     month_first = locale.startswith("en_US")
     cell = lambda r, f: r[cols[f]] if f in cols and cols[f] < len(r) else None  # noqa: E731
     pending, skipped = [], []

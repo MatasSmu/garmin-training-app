@@ -8,6 +8,13 @@ Ultra. It infers the wind from how you sailed, finds every tack and gybe,
 and gives you legs, polars, targets, splits, foiling stats, HR, race legs,
 speed maps, gear hours and progress over time.
 
+## Screenshots
+
+![Dashboard](docs/screenshots/dashboard.png)
+![Session map](docs/screenshots/session-map.png)
+![Training calendar](docs/screenshots/calendar.png)
+![AI coach](docs/screenshots/coach.png)
+
 ## Quick start
 
 ```bash
